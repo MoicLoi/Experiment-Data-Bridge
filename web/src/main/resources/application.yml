@@ -1,0 +1,229 @@
+ktor:
+  deployment:
+    port: 25560
+    host: 0.0.0.0
+
+  application:
+    modules:
+      - com.experiment.bridge.web.ApplicationKt.module
+
+
+api:
+  context-path: /api/v1
+
+plugins:
+  enabled: true
+  directory: ./plugins
+  declarative-directory: ./plugins/adapters
+  # Declarative HTTP plugins are denied unless their host is explicitly listed here.
+  declarative-allowed-hosts:
+    - 127.0.0.1
+    - localhost
+  fail-on-error: true
+
+
+database:
+
+  mysql:
+
+    host: localhost
+
+    port: 3306
+
+    database: edb
+
+    username: root
+
+    password: CHANGE_ME_USING_EXTERNAL_CONFIG
+
+
+    # JDBC连接地址
+    #jdbc-url: jdbc:mysql://${database.mysql.host}:${database.mysql.port}/${database.mysql.database}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC
+
+
+pool:
+  maximum-pool-size: 20
+  minimum-idle: 5
+  connection-timeout: 30000
+  idle-timeout: 600000
+  max-lifetime: 1800000
+
+
+storage:
+  data-path: ./data
+  results-path: ./data/results
+  reports-path: ./data/reports
+  orphan-cleanup:
+    enabled: true
+    minimum-age-hours: 24
+    cleanup-interval-minutes: 360
+    max-deletes-per-run: 1000
+  retention:
+    enabled: true
+    retention-days: 90
+    cleanup-interval-minutes: 1440
+    batch-size: 500
+    max-batches-per-run: 10
+
+security:
+
+  jwt:
+
+    secret: "CHANGE_ME_USING_EXTERNAL_CONFIG_MINIMUM_32_BYTES"
+
+    issuer: "experiment-data-bridge"
+
+    audience: "edb-client"
+
+    expires-in: 86400000
+
+
+
+ # initial-admin:
+
+   # enabled: true
+
+    #username: ${INITIAL_ADMIN_USERNAME:root}
+
+   # password: ${INITIAL_ADMIN_PASSWORD:114kwer35689}
+
+    #email: ${INITIAL_ADMIN_EMAIL:cliedser@gmail.com}
+
+    #full-name: ${INITIAL_ADMIN_NAME:系统管理员}
+
+
+agent:
+
+  model:
+    enabled: false
+    default-profile: deepseek-v4-flash
+    fallback-to-fake: false
+    profiles:
+      - id: deepseek-v4-flash
+        provider: openai-compatible
+        model-name: deepseek-v4-flash
+        base-url: https://api.deepseek.com
+        api-key-env: DEEPSEEK_API_KEY
+        temperature: 0.0
+        max-output-tokens: 4096
+        timeout-ms: 60000
+        tool-calling-enabled: true
+        # DeepSeek currently rejects OpenAI response_format for this model;
+        # strict Workflow JSON is enforced by the Agent validation/repair loop.
+        structured-output-enabled: false
+        max-concurrency: 2
+        requests-per-minute: 30
+        circuit-breaker-failures: 3
+        circuit-breaker-open-ms: 30000
+    quota:
+      enabled: false
+      daily-user-tokens: 100000
+      daily-project-tokens: 1000000
+
+  default-provider: local
+
+  retention:
+    enabled: false
+    retention-days: 90
+    cleanup-interval-minutes: 60
+    initial-delay-minutes: 5
+    batch-size: 100
+    max-batches-per-run: 10
+
+
+  local:
+
+    url: http://localhost:11434/api/generate
+
+    model: llama2:70b
+
+
+
+logging:
+
+  debug-mode: false
+
+  level:
+
+    root: INFO
+
+    com.experiment.bridge: DEBUG
+
+task:
+  analysis:
+    # EXTERNAL uses the configured HTTP endpoint; MANAGED_DOCKER controls a local container.
+    worker-mode: EXTERNAL
+    python-http:
+      enabled: false
+      handler-id: python-http
+      analysis-type: python
+      endpoint: http://127.0.0.1:8000/analyze
+      output-format: JSON
+      connect-timeout-ms: 5000
+      request-timeout-ms: 300000
+    # Generic protocol-compatible workers. Multiple Python, R, MATLAB or other
+    # HTTP handlers may coexist and are discovered through the Analysis API/CLI.
+    external-http-handlers:
+      - enabled: false
+        handler-id: r-statistical-summary
+        analysis-type: statistics
+        tool: r-http
+        endpoint: http://127.0.0.1:8001/analyze
+        output-format: JSON
+        connect-timeout-ms: 5000
+        request-timeout-ms: 300000
+    docker-worker:
+      id: python
+      enabled: true
+      image: edb/python-worker:dev
+      worker-kind: python-http
+      container-name: edb-python-worker
+      host: 127.0.0.1
+      bind-address: 127.0.0.1
+      host-port: 8000
+      container-port: 8000
+      health-path: /health
+      max-upload-bytes: 10737418240
+      cpu-limit: 2.0
+      memory-limit-bytes: 4294967296
+      temporary-storage-bytes: 2147483648
+      health-request-timeout-ms: 3000
+      readiness-timeout-ms: 60000
+      readiness-poll-interval-ms: 500
+      stop-timeout-ms: 20000
+    # Additional managed workers are started and stopped as one fleet. The
+    # legacy docker-worker above is included only when worker-mode is MANAGED_DOCKER.
+    managed-docker-workers: []
+  workflow:
+    enabled: false
+    directory: ./config/workflows
+    template-directory: ./config/workflow-templates
+  report:
+    enabled: false
+    directory: ./config/reports
+    r-http:
+      enabled: false
+      generator-id: r-tabular-summary-report
+      endpoint: http://127.0.0.1:8001/analyze
+      output-formats: [PDF]
+      connect-timeout-ms: 5000
+      request-timeout-ms: 300000
+  retention:
+    enabled: false
+    retention-days: 90
+    cleanup-interval-minutes: 60
+    batch-size: 500
+    max-batches-per-run: 10
+
+
+initial-admin:
+
+    enabled: true
+
+    username: admin
+
+    password: CHANGE_ME_USING_EXTERNAL_CONFIG
+
+    email: admin@experiment-bridge.com
+
+    full-name: 系统管理员

@@ -1,0 +1,1028 @@
+openapi: 3.0.3
+info:
+  title: Experiment Data Bridge Task API
+  version: 0.25.0
+  description: |
+    Task execution, pipeline submission, lifecycle streaming, scheduler control,
+    runtime metrics, manual retry, retention management, and strict Workflow IR contracts.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Tasks
+  - name: Task lifecycle
+  - name: Workflow step catalog
+  - name: Workflow IR
+  - name: Phrase definitions
+  - name: Scheduler admin
+  - name: Docker worker fleet admin
+  - name: Task metrics admin
+  - name: Task retry admin
+  - name: Retention admin
+paths:
+  /projects/{projectId}/phrase-definitions:
+    parameters:
+      - in: path
+        name: projectId
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [Phrase definitions]
+      operationId: listPhraseDefinitions
+      responses:
+        '200':
+          description: Versioned natural-language action definitions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PhraseDefinitionPageResponse' }
+    post:
+      tags: [Phrase definitions]
+      operationId: savePhraseDefinition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SavePhraseDefinitionRequest' }
+      responses:
+        '201':
+          description: Created or deduplicated definition version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PhraseDefinitionResponse' }
+  /projects/{projectId}/phrase-definitions/{definitionId}/latest:
+    get:
+      tags: [Phrase definitions]
+      operationId: getLatestPhraseDefinition
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - in: path
+          name: definitionId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Latest definition version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PhraseDefinitionResponse' }
+  /projects/{projectId}/phrase-definitions/{definitionId}:
+    patch:
+      tags: [Phrase definitions]
+      operationId: renamePhraseDefinition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newDefinitionId]
+              properties: { newDefinitionId: { type: string } }
+      responses: { '200': { description: All versions renamed } }
+  /projects/{projectId}/phrase-definitions/{definitionId}/versions/{version}:
+    delete:
+      tags: [Phrase definitions]
+      operationId: deletePhraseDefinitionVersion
+      responses: { '204': { description: Version deleted and audited } }
+  /projects/{projectId}/phrase-definitions/{definitionId}/submit:
+    post:
+      tags: [Phrase definitions]
+      operationId: submitPhraseDefinitionTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitPhraseDefinitionRequest' }
+      responses:
+        '202':
+          description: Immutable Phrase version compiled and submitted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+  /workflows/validate:
+    post:
+      tags: [Workflow IR]
+      operationId: validateWorkflowIr
+      summary: Strictly parse, validate, and compile-preview a Workflow IR v1 document
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkflowIr' }
+      responses:
+        '200':
+          description: Valid compilation preview; no Pipeline is registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowIrCompilationResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /workflows/compile:
+    post:
+      tags: [Workflow IR]
+      operationId: compileWorkflowIr
+      summary: Strictly validate, compile, and register a Workflow IR v1 Pipeline (ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkflowIr' }
+      responses:
+        '201':
+          description: Pipeline compiled and registered for Task submission
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowIrCompilationResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /workflow-steps:
+    get:
+      tags: [Workflow step catalog]
+      operationId: listWorkflowSteps
+      summary: List executable Workflow step types and supported versions
+      responses:
+        '200':
+          description: Workflow step catalog ordered by type and version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowStepCatalogResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /workflow-steps/{stepType}:
+    parameters:
+      - $ref: '#/components/parameters/WorkflowStepType'
+      - $ref: '#/components/parameters/WorkflowStepVersion'
+    get:
+      tags: [Workflow step catalog]
+      operationId: getWorkflowStep
+      summary: Get one executable Workflow step version
+      responses:
+        '200':
+          description: Workflow step metadata and Schema location
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowStepCatalogItemResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /workflow-steps/{stepType}/schema:
+    parameters:
+      - $ref: '#/components/parameters/WorkflowStepType'
+      - $ref: '#/components/parameters/WorkflowStepVersion'
+    get:
+      tags: [Workflow step catalog]
+      operationId: getWorkflowStepParameterSchema
+      summary: Get the raw JSON Schema 2020-12 document for one Workflow step version
+      responses:
+        '200':
+          description: Workflow step parameter Schema
+          content:
+            application/schema+json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tasks/pipeline:
+    post:
+      tags: [Tasks]
+      operationId: submitPipelineTask
+      summary: Submit a registered pipeline as a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitPipelineTaskRequest'
+      responses:
+        '201':
+          description: Task accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tasks/{taskId}:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    get:
+      tags: [Tasks]
+      operationId: getTask
+      summary: Get a task and its current status
+      responses:
+        '200':
+          description: Current task snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tasks/{taskId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      tags: [Tasks]
+      operationId: requestTaskCancellation
+      summary: Request cooperative task cancellation
+      responses:
+        '200':
+          description: Updated task snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tasks/{taskId}/timeline:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    get:
+      tags: [Task lifecycle]
+      operationId: getTaskTimeline
+      summary: Get the complete ordered audit timeline for a task
+      responses:
+        '200':
+          description: Ordered lifecycle audit events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTimelineResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      tags: [Tasks]
+      operationId: listProjectTasks
+      summary: List project tasks with status filtering and pagination
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/TaskStatus'
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Page of tasks ordered newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskPageResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/tasks/events:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      tags: [Task lifecycle]
+      operationId: streamProjectTaskEvents
+      summary: Stream project task lifecycle events using SSE
+      description: |
+        Sends standard `id`, `event`, and JSON `data` fields. A comment heartbeat
+        is sent every 15 seconds. Event names are lower-case lifecycle types.
+      responses:
+        '200':
+          description: Server-sent event stream
+          headers:
+            Cache-Control:
+              schema: { type: string, example: no-cache }
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: |
+                  id: 81-1786363200000
+                  event: progress_updated
+                  data: {"taskId":81,"projectId":7,"type":"PROGRESS_UPDATED","status":"RUNNING","attemptCount":1,"details":{"progressPercent":"40"},"occurredAt":"2026-08-10T12:00:00Z"}
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/task-scheduler:
+    get:
+      tags: [Scheduler admin]
+      operationId: getTaskSchedulerState
+      summary: Get scheduler state and concurrency
+      responses:
+        '200':
+          description: Scheduler state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskSchedulerStateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/task-scheduler/start:
+    post:
+      tags: [Scheduler admin]
+      operationId: startTaskScheduler
+      summary: Start the scheduler idempotently
+      responses:
+        '200':
+          description: Updated scheduler state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskSchedulerStateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/task-scheduler/stop:
+    post:
+      tags: [Scheduler admin]
+      operationId: stopTaskScheduler
+      summary: Stop the scheduler gracefully and idempotently
+      responses:
+        '200':
+          description: Updated scheduler state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskSchedulerStateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/task-scheduler/workers:
+    put:
+      tags: [Scheduler admin]
+      operationId: updateTaskSchedulerWorkers
+      summary: Change desired worker concurrency
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTaskSchedulerWorkersRequest' }
+      responses:
+        '200':
+          description: Updated scheduler state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskSchedulerStateResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/docker-workers:
+    get:
+      tags: [Docker worker fleet admin]
+      operationId: getDockerWorkerFleet
+      summary: Refresh and list configured Docker workers and health state
+      responses:
+        '200':
+          description: Current fleet snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DockerWorkerFleetResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /admin/docker-workers/start:
+    post:
+      tags: [Docker worker fleet admin]
+      operationId: startDockerWorkerFleet
+      summary: Start all configured Docker workers
+      responses:
+        '200':
+          description: Updated fleet snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DockerWorkerFleetResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /admin/docker-workers/stop:
+    post:
+      tags: [Docker worker fleet admin]
+      operationId: stopDockerWorkerFleet
+      summary: Stop all configured Docker workers
+      responses:
+        '200':
+          description: Updated fleet snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DockerWorkerFleetResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /admin/docker-workers/{workerId}/restart:
+    parameters:
+      - $ref: '#/components/parameters/DockerWorkerId'
+    post:
+      tags: [Docker worker fleet admin]
+      operationId: restartDockerWorker
+      summary: Restart one configured Docker worker
+      responses:
+        '200':
+          description: Updated worker snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DockerWorkerResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /admin/docker-workers/{workerId}/logs:
+    parameters:
+      - $ref: '#/components/parameters/DockerWorkerId'
+    get:
+      tags: [Docker worker fleet admin]
+      operationId: getDockerWorkerLogs
+      summary: Read bounded logs from one configured Docker worker
+      parameters:
+        - name: tail
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 10000, default: 200 }
+        - name: stdout
+          in: query
+          schema: { type: boolean, default: true }
+        - name: stderr
+          in: query
+          schema: { type: boolean, default: true }
+        - name: timestamps
+          in: query
+          schema: { type: boolean, default: true }
+        - name: timeoutMs
+          in: query
+          schema: { type: integer, format: int64, minimum: 1, default: 5000 }
+      responses:
+        '200':
+          description: Collected container logs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DockerWorkerLogsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /admin/task-metrics:
+    get:
+      tags: [Task metrics admin]
+      operationId: getTaskRuntimeMetrics
+      summary: Get a global task runtime metrics snapshot
+      responses:
+        '200':
+          description: Runtime metrics snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskRuntimeMetricsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/tasks/{taskId}/requeue:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      tags: [Task retry admin]
+      operationId: requeueFailedTask
+      summary: Requeue a failed or timed-out task
+      responses:
+        '200':
+          description: Requeued task snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/task-retention:
+    get:
+      tags: [Retention admin]
+      operationId: getTaskRetentionOverview
+      summary: Get retention policy and current manager state
+      responses:
+        '200':
+          description: Retention overview
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskRetentionOverviewResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/task-retention/estimate:
+    get:
+      tags: [Retention admin]
+      operationId: estimateExpiredTasks
+      summary: Estimate expired tasks without deleting data
+      responses:
+        '200':
+          description: Retention estimate
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskRetentionEstimateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/task-retention/cleanup:
+    post:
+      tags: [Retention admin]
+      operationId: runTaskRetentionCleanup
+      summary: Trigger retention cleanup manually
+      responses:
+        '200':
+          description: Cleanup result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskCleanupResultResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/task-retention/last-result:
+    get:
+      tags: [Retention admin]
+      operationId: getLastTaskRetentionResult
+      summary: Get running state and the latest cleanup result or failure
+      responses:
+        '200':
+          description: Retention manager state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskRetentionStateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    DockerWorkerId:
+      name: workerId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$'
+    WorkflowStepType:
+      name: stepType
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+    WorkflowStepVersion:
+      name: version
+      in: query
+      required: false
+      schema: { type: string, minLength: 1, default: '1' }
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Missing or invalid JWT
+    Forbidden:
+      description: Insufficient project access or administrator role
+    NotFound:
+      description: Task, project, or pipeline not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Current state conflicts with the requested operation
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ServiceUnavailable:
+      description: Docker Engine, worker health check, or fleet operation is unavailable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    SavePhraseDefinitionRequest:
+      type: object
+      required: [definitionId, document]
+      properties:
+        definitionId: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,149}$' }
+        document:
+          type: object
+          required: [schemaVersion, actions]
+          properties:
+            schemaVersion: { type: integer, enum: [1] }
+            actions: { type: array, minItems: 1, items: { type: object } }
+    PhraseDefinitionResponse:
+      allOf:
+        - $ref: '#/components/schemas/SavePhraseDefinitionRequest'
+        - type: object
+          required: [id, projectId, version, sha256, createdBy, createdAt]
+          properties:
+            id: { type: integer, format: int64 }
+            projectId: { type: integer }
+            version: { type: integer, minimum: 1 }
+            sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+            createdBy: { type: integer }
+            createdAt: { type: string, format: date-time }
+    PhraseDefinitionPageResponse:
+      type: object
+      required: [items, page, size, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/PhraseDefinitionResponse' } }
+        page: { type: integer, minimum: 0 }
+        size: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, format: int64, minimum: 0 }
+    SubmitPhraseDefinitionRequest:
+      type: object
+      required: [version, expectedSha256]
+      properties:
+        version: { type: integer, minimum: 1 }
+        expectedSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        context: { type: object, additionalProperties: { type: string } }
+        idempotencyKey: { type: string, nullable: true }
+        priority: { type: integer, minimum: 0, maximum: 100, default: 50 }
+        retry: { $ref: '#/components/schemas/TaskRetryPolicyRequest' }
+        timeoutMs: { type: integer, format: int64, minimum: 1, nullable: true }
+    WorkflowIrInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        contextKey: { type: string, minLength: 1 }
+        required: { type: boolean, default: true }
+        description: { type: string, nullable: true }
+        default: { nullable: true }
+    WorkflowIrOutput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        contextKey: { type: string, minLength: 1 }
+        required: { type: boolean, default: true }
+        description: { type: string, nullable: true }
+    WorkflowIrContextBinding:
+      type: object
+      additionalProperties: false
+      required: [parameterPath, contextKey]
+      properties:
+        parameterPath: { type: string, pattern: '^/.+' }
+        contextKey: { type: string, minLength: 1 }
+        required: { type: boolean, default: true }
+    WorkflowIrOutputBinding:
+      type: object
+      additionalProperties: false
+      required: [sourceContextKey, targetContextKey]
+      properties:
+        sourceContextKey: { type: string, minLength: 1 }
+        targetContextKey: { type: string, minLength: 1 }
+        required: { type: boolean, default: true }
+    WorkflowIrRetryPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        maxAttempts: { type: integer, minimum: 1, default: 1 }
+        initialDelayMs: { type: integer, format: int64, minimum: 0, default: 1000 }
+        backoffMultiplier: { type: number, format: double, minimum: 1, default: 2.0 }
+        maxDelayMs: { type: integer, format: int64, minimum: 0, default: 60000 }
+    WorkflowIrStepPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        timeoutMs: { type: integer, format: int64, minimum: 1, nullable: true }
+        retry: { $ref: '#/components/schemas/WorkflowIrRetryPolicy' }
+        failureStrategy: { type: string, enum: [STOP_WORKFLOW, CONTINUE], default: STOP_WORKFLOW }
+    WorkflowIrStep:
+      type: object
+      additionalProperties: false
+      required: [id, type, version, order]
+      properties:
+        id: { type: string, minLength: 1 }
+        type: { type: string, minLength: 1 }
+        version: { type: string, minLength: 1 }
+        order: { type: integer, minimum: 0 }
+        dependsOn:
+          type: array
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+        parameters: { type: object, additionalProperties: true }
+        contextBindings:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowIrContextBinding' }
+        outputBindings:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowIrOutputBinding' }
+        policy: { $ref: '#/components/schemas/WorkflowIrStepPolicy' }
+    WorkflowIr:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, id, version, steps]
+      properties:
+        schemaVersion: { type: integer, enum: [1] }
+        id: { type: string, minLength: 1 }
+        version: { type: string, minLength: 1 }
+        description: { type: string, nullable: true }
+        inputs:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowIrInput' }
+        outputs:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowIrOutput' }
+        steps:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/WorkflowIrStep' }
+    WorkflowIrCompilationResponse:
+      type: object
+      required: [schemaVersion, workflowId, workflowVersion, stepIds, executionOrder, registered]
+      properties:
+        schemaVersion: { type: integer, enum: [1] }
+        workflowId: { type: string }
+        workflowVersion: { type: string }
+        description: { type: string, nullable: true }
+        stepIds:
+          type: array
+          items: { type: string }
+        executionOrder:
+          type: array
+          items: { type: string }
+        registered: { type: boolean }
+    WorkflowStepCatalogItemResponse:
+      type: object
+      required: [type, version, source, title, schemaAvailable, capabilities]
+      properties:
+        type: { type: string }
+        version: { type: string }
+        source:
+          type: string
+          enum: [BUILT_IN, PLUGIN]
+        title: { type: string }
+        description: { type: string, nullable: true }
+        schemaAvailable: { type: boolean }
+        schemaUrl: { type: string, nullable: true }
+        capabilities:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowStepCapabilityResponse' }
+    WorkflowStepCapabilityResponse:
+      type: object
+      required: [id, titleKey, cliPath, sourceType, sourceId, sourceVersion]
+      properties:
+        id: { type: string }
+        titleKey: { type: string }
+        descriptionKey: { type: string, nullable: true }
+        cliPath:
+          type: array
+          items: { type: string }
+        sourceType: { type: string }
+        sourceId: { type: string }
+        sourceVersion: { type: string }
+    WorkflowStepCatalogResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowStepCatalogItemResponse' }
+    TaskStatus:
+      type: string
+      enum: [PENDING, QUEUED, RUNNING, RETRYING, COMPLETED, FAILED, TIMED_OUT, CANCELLED]
+    TaskRetryPolicyRequest:
+      type: object
+      properties:
+        maxAttempts: { type: integer, minimum: 1, default: 1 }
+        initialDelayMs: { type: integer, format: int64, minimum: 0, default: 1000 }
+        backoffMultiplier: { type: number, format: double, minimum: 1, default: 2.0 }
+        maxDelayMs: { type: integer, format: int64, minimum: 0, default: 60000 }
+    SubmitPipelineTaskRequest:
+      type: object
+      required: [projectId, pipelineId]
+      properties:
+        projectId: { type: integer, minimum: 1 }
+        pipelineId: { type: string, minLength: 1 }
+        context:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+        priority: { type: integer, minimum: 0, maximum: 100, default: 50 }
+        retry: { $ref: '#/components/schemas/TaskRetryPolicyRequest' }
+        timeoutMs: { type: integer, format: int64, minimum: 1, nullable: true }
+    TaskProgressResponse:
+      type: object
+      required: [percent, updatedAt]
+      properties:
+        percent: { type: integer, minimum: 0, maximum: 100 }
+        message: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    TaskResultResponse:
+      type: object
+      required: [metadata]
+      properties:
+        outputPath: { type: string, nullable: true }
+        contentType: { type: string, nullable: true }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+    TaskErrorResponse:
+      type: object
+      required: [code, category, message, retryable, details, occurredAt]
+      properties:
+        code: { type: string }
+        category:
+          type: string
+          enum: [VALIDATION, CONFIGURATION, AUTHORIZATION, NOT_FOUND, TRANSIENT, TIMEOUT, EXECUTION, INTERNAL]
+        message: { type: string }
+        retryable: { type: boolean }
+        details:
+          type: object
+          additionalProperties: { type: string }
+        occurredAt: { type: string, format: date-time }
+    TaskFailureDiagnosticResponse:
+      type: object
+      required: [code, title, message, automaticActionSafe]
+      properties:
+        code: { type: string }
+        title: { type: string }
+        message: { type: string }
+        action: { type: string, enum: [START_WORKER, REVIEW_PARAMETERS, CHECK_CONFIGURATION, CONVERT_INPUT, RETRY], nullable: true }
+        actionLabel: { type: string, nullable: true }
+        automaticActionSafe: { type: boolean }
+    TaskResponse:
+      type: object
+      required: [id, projectId, taskType, status, priority, attemptCount, maxAttempts, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        projectId: { type: integer }
+        taskType: { type: string }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+        priority: { type: integer, minimum: 0, maximum: 100 }
+        attemptCount: { type: integer, minimum: 0 }
+        maxAttempts: { type: integer, minimum: 1 }
+        nextAttemptAt: { type: string, format: date-time, nullable: true }
+        timeoutMs: { type: integer, format: int64, nullable: true }
+        cancellationRequestedAt: { type: string, format: date-time, nullable: true }
+        cancellationRequestedBy: { type: integer, nullable: true }
+        progress: { allOf: [{ $ref: '#/components/schemas/TaskProgressResponse' }], nullable: true }
+        result: { allOf: [{ $ref: '#/components/schemas/TaskResultResponse' }], nullable: true }
+        error: { allOf: [{ $ref: '#/components/schemas/TaskErrorResponse' }], nullable: true }
+        diagnostic: { allOf: [{ $ref: '#/components/schemas/TaskFailureDiagnosticResponse' }], nullable: true }
+        durationMs: { type: integer, format: int64, minimum: 0, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+    TaskPageResponse:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TaskResponse' }
+        page: { type: integer, minimum: 0 }
+        size: { type: integer, minimum: 1, maximum: 100 }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer, format: int64 }
+    TaskAuditEventResponse:
+      type: object
+      required: [id, type, details, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        type:
+          type: string
+          enum: [CREATED, ENQUEUED, CLAIMED, RETRY_SCHEDULED, COMPLETED, FAILED, TIMED_OUT, MANUALLY_REQUEUED, CANCELLATION_REQUESTED, CANCELLED]
+        fromStatus: { allOf: [{ $ref: '#/components/schemas/TaskStatus' }], nullable: true }
+        toStatus: { allOf: [{ $ref: '#/components/schemas/TaskStatus' }], nullable: true }
+        actorUserId: { type: integer, nullable: true }
+        details:
+          type: object
+          additionalProperties: { type: string }
+        createdAt: { type: string, format: date-time }
+    TaskTimelineResponse:
+      type: object
+      required: [taskId, events]
+      properties:
+        taskId: { type: integer }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/TaskAuditEventResponse' }
+    UpdateTaskSchedulerWorkersRequest:
+      type: object
+      required: [workerCount]
+      properties:
+        workerCount: { type: integer, minimum: 1, maximum: 64 }
+    TaskSchedulerStateResponse:
+      type: object
+      required: [status, desiredWorkerCount, activeWorkerCount]
+      properties:
+        status:
+          type: string
+          enum: [STOPPED, STARTING, RUNNING, DEGRADED, STOPPING]
+        desiredWorkerCount: { type: integer, minimum: 1 }
+        activeWorkerCount: { type: integer, minimum: 0 }
+        startedAt: { type: string, format: date-time, nullable: true }
+        stoppedAt: { type: string, format: date-time, nullable: true }
+        lastFailure: { type: string, nullable: true }
+    DockerWorkerStatus:
+      type: string
+      enum: [ABSENT, CREATED, STARTING, RUNNING, HEALTHY, UNHEALTHY, STOPPING, STOPPED, FAILED]
+    DockerWorkerResponse:
+      type: object
+      required: [id, status, containerName, endpoint, healthy, observedAt]
+      properties:
+        id: { type: string }
+        status: { $ref: '#/components/schemas/DockerWorkerStatus' }
+        containerName: { type: string }
+        endpoint: { type: string, format: uri }
+        containerId: { type: string, nullable: true }
+        healthy: { type: boolean }
+        detail: { type: string, nullable: true }
+        observedAt: { type: string, format: date-time }
+    DockerWorkerFleetResponse:
+      type: object
+      required: [healthy, observedAt, members]
+      properties:
+        healthy: { type: boolean }
+        observedAt: { type: string, format: date-time }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/DockerWorkerResponse' }
+    DockerWorkerLogsResponse:
+      type: object
+      required: [workerId, containerId, content, collectedAt]
+      properties:
+        workerId: { type: string }
+        containerId: { type: string }
+        content: { type: string }
+        collectedAt: { type: string, format: date-time }
+    TaskRuntimeMetricsResponse:
+      type: object
+      required: [queueDepth, queuedCount, retryingCount, runningCount, succeededCount, failedCount, timedOutCount, collectedAt]
+      properties:
+        queueDepth: { type: integer, format: int64, minimum: 0 }
+        queuedCount: { type: integer, format: int64, minimum: 0 }
+        retryingCount: { type: integer, format: int64, minimum: 0 }
+        runningCount: { type: integer, format: int64, minimum: 0 }
+        succeededCount: { type: integer, format: int64, minimum: 0 }
+        failedCount: { type: integer, format: int64, minimum: 0 }
+        timedOutCount: { type: integer, format: int64, minimum: 0 }
+        averageExecutionDurationMs: { type: number, format: double, nullable: true }
+        collectedAt: { type: string, format: date-time }
+    TaskRetentionPolicyResponse:
+      type: object
+      required: [enabled, retentionDays, cleanupIntervalMinutes, batchSize, maxBatchesPerRun]
+      properties:
+        enabled: { type: boolean }
+        retentionDays: { type: integer, format: int64, minimum: 1 }
+        cleanupIntervalMinutes: { type: integer, format: int64, minimum: 1 }
+        batchSize: { type: integer, minimum: 1, maximum: 5000 }
+        maxBatchesPerRun: { type: integer, minimum: 1, maximum: 100 }
+    TaskCleanupResultResponse:
+      type: object
+      required: [cutoff, deletedTasks, completedBatches, completedAt]
+      properties:
+        cutoff: { type: string, format: date-time }
+        deletedTasks: { type: integer, minimum: 0 }
+        completedBatches: { type: integer, minimum: 0 }
+        completedAt: { type: string, format: date-time }
+    TaskRetentionStateResponse:
+      type: object
+      required: [running]
+      properties:
+        running: { type: boolean }
+        lastStartedAt: { type: string, format: date-time, nullable: true }
+        lastResult: { allOf: [{ $ref: '#/components/schemas/TaskCleanupResultResponse' }], nullable: true }
+        lastFailure: { type: string, nullable: true }
+    TaskRetentionOverviewResponse:
+      type: object
+      required: [policy, state]
+      properties:
+        policy: { $ref: '#/components/schemas/TaskRetentionPolicyResponse' }
+        state: { $ref: '#/components/schemas/TaskRetentionStateResponse' }
+    TaskRetentionEstimateResponse:
+      type: object
+      required: [cutoff, expiredTasks, collectedAt]
+      properties:
+        cutoff: { type: string, format: date-time }
+        expiredTasks: { type: integer, format: int64, minimum: 0 }
+        collectedAt: { type: string, format: date-time }
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        timestamp: { type: integer, format: int64 }

@@ -1,0 +1,90 @@
+package me.moiclathy.edb.core.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.database.model.Project
+import me.moiclathy.edb.core.database.repository.ProjectRepository
+import me.moiclathy.edb.core.exception.PermissionDeniedException
+import me.moiclathy.edb.core.exception.ProjectNotFoundException
+import me.moiclathy.edb.core.security.PermissionChecker
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+
+class ProjectConfigurationExportServiceTest {
+
+    private val repository = mockk<ProjectRepository>()
+    private val permissionChecker = mockk<PermissionChecker>()
+    private val auditService = mockk<AuditService>(relaxed = true)
+
+    private val exportService = ProjectConfigurationExportService(
+        repository = repository,
+        permissionChecker = permissionChecker,
+        auditService = auditService
+    )
+
+    @Test
+    fun `should export configuration successfully when project exists and user has permission`() {
+        // Arrange
+        val projectId = 1
+        val userId = 1
+        val expectedYaml = "version: 1\nproject:\n  name: demo"
+        val mockProject = mockk<Project> {
+            every { name } returns "demo"
+            every { configYaml } returns expectedYaml
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns true
+
+        // Act
+        val result = exportService.export(
+            projectId = projectId,
+            userId = userId
+        )
+
+        // Assert
+        assertEquals(expectedYaml, result.yaml)
+        assertEquals("demo.yaml", result.fileName)
+
+        // Verify audit log was recorded
+        verify(exactly = 1) { auditService.recordConfigurationExport(projectId, userId) }
+    }
+
+    @Test
+    fun `should throw ProjectNotFoundException when project does not exist`() {
+        // Arrange
+        val nonExistentId = 999
+        val userId = 1
+
+        every { repository.findById(nonExistentId) } returns null
+
+        // Act & Assert
+        assertThrows<ProjectNotFoundException> {
+            exportService.export(
+                nonExistentId,
+                userId
+            )
+        }
+    }
+
+    @Test
+    fun `should throw PermissionDeniedException when user lacks read permission`() {
+        // Arrange
+        val projectId = 1
+        val userId = 2
+        val mockProject = mockk<Project>()
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns false
+
+        // Act & Assert
+        assertThrows<PermissionDeniedException> {
+            exportService.export(
+                projectId,
+                userId
+            )
+        }
+    }
+}

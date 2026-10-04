@@ -1,0 +1,678 @@
+package me.moiclathy.edb.core.config.metadata.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.config.metadata.model.ConfigurationMetadata
+import me.moiclathy.edb.core.config.metadata.repository.ConfigurationMetadataRepository
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.time.Instant
+
+class ConfigurationMetadataServiceTest {
+
+    private val repository =
+        mockk<ConfigurationMetadataRepository>()
+
+    private val service =
+        ConfigurationMetadataService(repository)
+
+    @Test
+    fun `should create metadata`() {
+
+        every {
+            repository.exists(1)
+        } returns false
+
+        every {
+            repository.save(any())
+        } answers {
+            firstArg()
+        }
+
+        val result =
+            service.create(
+                projectId = 1,
+                description = "Laboratory animal experiment",
+                category = "animal",
+                tags = listOf(
+                    "animal",
+                    "experiment",
+                    "veterinary"
+                ),
+                dataSource = "mysql"
+            )
+
+        assertEquals(
+            1,
+            result.projectId
+        )
+
+        assertEquals(
+            "Laboratory animal experiment",
+            result.description
+        )
+
+        assertEquals(
+            listOf(
+                "animal",
+                "experiment",
+                "veterinary"
+            ),
+            result.tags
+        )
+
+        assertEquals(
+            "mysql",
+            result.dataSource
+        )
+
+        verify(exactly = 1) {
+            repository.exists(1)
+        }
+
+        verify(exactly = 1) {
+            repository.save(any())
+        }
+    }
+
+    @Test
+    fun `should reject duplicate metadata`() {
+
+        every {
+            repository.exists(1)
+        } returns true
+
+        assertThrows<IllegalArgumentException> {
+
+            service.create(
+                projectId = 1,
+                description = "Test",
+                category = "test",
+                tags = emptyList(),
+                dataSource = "mysql"
+            )
+        }
+
+        verify(exactly = 1) {
+            repository.exists(1)
+        }
+
+        verify(exactly = 0) {
+            repository.save(any())
+        }
+    }
+
+    @Test
+    fun `should get metadata`() {
+
+        val metadata =
+            sampleMetadata()
+
+        every {
+            repository.findByProjectId(1)
+        } returns metadata
+
+        val result =
+            service.get(1)
+
+        assertEquals(
+            metadata,
+            result
+        )
+
+        verify(exactly = 1) {
+            repository.findByProjectId(1)
+        }
+    }
+
+    @Test
+    fun `should return null when metadata does not exist`() {
+
+        every {
+            repository.findByProjectId(1)
+        } returns null
+
+        val result =
+            service.get(1)
+
+        assertEquals(
+            null,
+            result
+        )
+
+        verify(exactly = 1) {
+            repository.findByProjectId(1)
+        }
+    }
+
+    @Test
+    fun `should update metadata`() {
+
+        every {
+            repository.exists(1)
+        } returns true
+
+        every {
+            repository.update(any())
+        } answers {
+            firstArg()
+        }
+
+        val result =
+            service.update(
+                projectId = 1,
+                description = "Updated description",
+                category = "updated",
+                tags = listOf(
+                    "animal",
+                    "updated",
+                    "animal"
+                ),
+                dataSource = "yaml"
+            )
+
+        assertEquals(
+            1,
+            result.projectId
+        )
+
+        assertEquals(
+            "Updated description",
+            result.description
+        )
+
+        assertEquals(
+            "updated",
+            result.category
+        )
+
+        assertEquals(
+            listOf(
+                "animal",
+                "updated"
+            ),
+            result.tags
+        )
+
+        assertEquals(
+            "yaml",
+            result.dataSource
+        )
+
+        verify(exactly = 1) {
+            repository.exists(1)
+        }
+
+        verify(exactly = 1) {
+            repository.update(any())
+        }
+    }
+
+    @Test
+    fun `should reject update when metadata does not exist`() {
+
+        every {
+            repository.exists(1)
+        } returns false
+
+        assertThrows<IllegalArgumentException> {
+
+            service.update(
+                projectId = 1,
+                description = "Test",
+                category = "test",
+                tags = emptyList(),
+                dataSource = "mysql"
+            )
+        }
+
+        verify(exactly = 1) {
+            repository.exists(1)
+        }
+
+        verify(exactly = 0) {
+            repository.update(any())
+        }
+    }
+
+    @Test
+    fun `should save metadata`() {
+
+        val metadata =
+            sampleMetadata()
+
+        every {
+            repository.save(any())
+        } answers {
+            firstArg()
+        }
+
+        val result =
+            service.save(metadata)
+
+        assertEquals(
+            metadata.projectId,
+            result.projectId
+        )
+
+        assertEquals(
+            metadata.description,
+            result.description
+        )
+
+        assertEquals(
+            metadata.category,
+            result.category
+        )
+
+        assertEquals(
+            metadata.tags,
+            result.tags
+        )
+
+        assertEquals(
+            metadata.dataSource,
+            result.dataSource
+        )
+
+        verify(exactly = 1) {
+            repository.save(any())
+        }
+    }
+
+    @Test
+    fun `should delete metadata`() {
+
+        every {
+            repository.delete(1)
+        } returns Unit
+
+        service.delete(1)
+
+        verify(exactly = 1) {
+            repository.delete(1)
+        }
+    }
+
+    @Test
+    fun `should check metadata existence`() {
+
+        every {
+            repository.exists(1)
+        } returns true
+
+        assertTrue(
+            service.exists(1)
+        )
+
+        verify(exactly = 1) {
+            repository.exists(1)
+        }
+    }
+
+    @Test
+    fun `should normalize tags`() {
+
+        every {
+            repository.exists(1)
+        } returns false
+
+        every {
+            repository.save(any())
+        } answers {
+            firstArg()
+        }
+
+        val result =
+            service.create(
+                projectId = 1,
+                description = null,
+                category = null,
+                tags = listOf(
+                    " animal ",
+                    "",
+                    "experiment",
+                    "animal",
+                    "   "
+                ),
+                dataSource = null
+            )
+
+        assertEquals(
+            listOf(
+                "animal",
+                "experiment"
+            ),
+            result.tags
+        )
+    }
+
+    @Test
+    fun `should reject invalid project id`() {
+
+        assertThrows<IllegalArgumentException> {
+            service.get(0)
+        }
+
+        assertThrows<IllegalArgumentException> {
+            service.create(
+                projectId = 0,
+                description = null,
+                category = null,
+                tags = emptyList(),
+                dataSource = null
+            )
+        }
+
+        assertThrows<IllegalArgumentException> {
+            service.update(
+                projectId = -1,
+                description = null,
+                category = null,
+                tags = emptyList(),
+                dataSource = null
+            )
+        }
+
+        assertThrows<IllegalArgumentException> {
+            service.delete(0)
+        }
+
+        assertThrows<IllegalArgumentException> {
+            service.exists(-1)
+        }
+    }
+
+    private fun sampleMetadata(
+        projectId: Int = 1
+    ): ConfigurationMetadata {
+
+        val now =
+            Instant.now()
+
+        return ConfigurationMetadata(
+            projectId = projectId,
+            description = "Test configuration",
+            category = "animal",
+            tags = listOf(
+                "animal",
+                "experiment"
+            ),
+            updatedAt = now,
+            dataSource = "mysql"
+        )
+    }
+
+    @Test
+    fun `should list metadata tags`() {
+
+        val metadata =
+            sampleMetadata()
+
+        every {
+            repository.findByProjectId(1)
+        } returns metadata
+
+        val result =
+            service.listTags(1)
+
+        assertEquals(
+            listOf(
+                "animal",
+                "experiment"
+            ),
+            result
+        )
+
+        verify(exactly = 1) {
+            repository.findByProjectId(1)
+        }
+    }
+    @Test
+    fun `should reject list tags when metadata does not exist`() {
+
+        every {
+            repository.findByProjectId(1)
+        } returns null
+
+        assertThrows<IllegalArgumentException> {
+            service.listTags(1)
+        }
+    }
+    @Test
+    fun `should add tag`() {
+
+        val metadata =
+            sampleMetadata()
+
+        every {
+            repository.findByProjectId(1)
+        } returns metadata
+
+        every {
+            repository.update(any())
+        } answers {
+            firstArg()
+        }
+
+        val result =
+            service.addTag(
+                projectId = 1,
+                tag = "veterinary"
+            )
+
+        assertEquals(
+            listOf(
+                "animal",
+                "experiment",
+                "veterinary"
+            ),
+            result.tags
+        )
+
+        verify(exactly = 1) {
+            repository.findByProjectId(1)
+        }
+
+        verify(exactly = 1) {
+            repository.update(any())
+        }
+    }
+    @Test
+    fun `should trim tag before adding`() {
+
+        val metadata =
+            sampleMetadata()
+
+        every {
+            repository.findByProjectId(1)
+        } returns metadata
+
+        every {
+            repository.update(any())
+        } answers {
+            firstArg()
+        }
+
+        val result =
+            service.addTag(
+                projectId = 1,
+                tag = "  veterinary  "
+            )
+
+        assertEquals(
+            listOf(
+                "animal",
+                "experiment",
+                "veterinary"
+            ),
+            result.tags
+        )
+    }
+    @Test
+    fun `should not duplicate existing tag`() {
+
+        val metadata =
+            sampleMetadata()
+
+        every {
+            repository.findByProjectId(1)
+        } returns metadata
+
+        val result =
+            service.addTag(
+                projectId = 1,
+                tag = "animal"
+            )
+
+        assertEquals(
+            metadata.tags,
+            result.tags
+        )
+
+        verify(exactly = 1) {
+            repository.findByProjectId(1)
+        }
+
+        verify(exactly = 0) {
+            repository.update(any())
+        }
+    }@Test
+    fun `should reject blank tag`() {
+
+        assertThrows<IllegalArgumentException> {
+
+            service.addTag(
+                projectId = 1,
+                tag = "   "
+            )
+        }
+
+        verify(exactly = 0) {
+            repository.findByProjectId(any())
+        }
+    }
+    @Test
+    fun `should remove tag`() {
+
+        val metadata =
+            sampleMetadata()
+
+        every {
+            repository.findByProjectId(1)
+        } returns metadata
+
+        every {
+            repository.update(any())
+        } answers {
+            firstArg()
+        }
+
+        val result =
+            service.removeTag(
+                projectId = 1,
+                tag = "animal"
+            )
+
+        assertEquals(
+            listOf("experiment"),
+            result.tags
+        )
+
+        verify(exactly = 1) {
+            repository.update(any())
+        }
+    }
+    @Test
+    fun `should not update when removing non existing tag`() {
+
+        val metadata =
+            sampleMetadata()
+
+        every {
+            repository.findByProjectId(1)
+        } returns metadata
+
+        val result =
+            service.removeTag(
+                projectId = 1,
+                tag = "veterinary"
+            )
+
+        assertEquals(
+            metadata.tags,
+            result.tags
+        )
+
+        verify(exactly = 0) {
+            repository.update(any())
+        }
+    }
+    @Test
+    fun `should trim tag before removing`() {
+
+        val metadata =
+            sampleMetadata()
+
+        every {
+            repository.findByProjectId(1)
+        } returns metadata
+
+        every {
+            repository.update(any())
+        } answers {
+            firstArg()
+        }
+
+        val result =
+            service.removeTag(
+                projectId = 1,
+                tag = "  animal "
+            )
+
+        assertEquals(
+            listOf("experiment"),
+            result.tags
+        )
+    }
+    @Test
+    fun `should reject remove tag when metadata does not exist`() {
+
+        every {
+            repository.findByProjectId(1)
+        } returns null
+
+        assertThrows<IllegalArgumentException> {
+
+            service.removeTag(
+                projectId = 1,
+                tag = "animal"
+            )
+        }
+    }
+    @Test
+    fun `should reject invalid project id for tag operations`() {
+
+        assertThrows<IllegalArgumentException> {
+            service.listTags(0)
+        }
+
+        assertThrows<IllegalArgumentException> {
+            service.addTag(
+                projectId = -1,
+                tag = "animal"
+            )
+        }
+
+        assertThrows<IllegalArgumentException> {
+            service.removeTag(
+                projectId = 0,
+                tag = "animal"
+            )
+        }
+    }
+}

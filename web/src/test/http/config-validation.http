@@ -1,0 +1,86 @@
+@auth_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODU5NDE0MTgsImV4cCI6MTc4NjAyNzgxOH0.shlrnXtEuaTpllPDSZTOkTP5xFqr5Gj_ozZf5U9fLho
+
+
+
+
+### 1. Valid configuration (有效配置验证)
+POST http://localhost:25560/api/v1/projects/2/configuration/validate
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "yaml": "version: 1\n\nproject:\n  name: test\n  species: mouse\n\nworkflow:\n  steps:\n    - prepare\n    - experiment\n\noutput:\n  format: json\n  path: ./output"
+}
+
+### 2. Invalid configuration (非法配置验证 - 预期返回版本不支持的错误)
+POST http://localhost:25560/api/v1/projects/2/configuration/validate
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "yaml": "version: 999\n\nproject:\n  name: test"
+}
+
+### 1. Valid configuration update (正常配置更新 - 预期返回 200 并在控制台打印 Git Commit)
+PUT http://localhost:25560/api/v1/projects/2/configuration
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "yaml": "version: 1\n\nproject:\n  name: updated\n  species: mouse\n\nworkflow:\n  steps:\n    - prepare\n    - experiment\n\noutput:\n  format: json\n  path: ./output"
+}
+
+### 2. Invalid configuration update (错误配置更新 - 预期返回 400 且配置不入库、无 Git 提交)
+PUT http://localhost:25560/api/v1/projects/2/configuration
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "yaml": "version: 999\n\nproject:\n  name: test"
+}
+
+### ==========================================
+### 1. 测试自动迁移 (v1 -> v2)
+### 预期:
+###   - 自动执行迁移，将 version 升级为 2
+###   - 数据库和 Git Commit 中的 version 均为 2
+### ==========================================
+PUT http://localhost:25560/api/v1/projects/2/configuration
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "yaml": "version: 1\n\nproject:\n  name: old\n  species: mouse\n\nworkflow:\n  steps:\n    - prepare\n\noutput:\n  format: json\n  path: ./output"
+}
+
+
+### ==========================================
+### 2. 测试已经是最新版本 (v2)
+### 预期:
+###   - Migration 不执行（控制台无迁移日志）
+###   - 直接通过校验并成功保存 (200 OK)
+### ==========================================
+PUT http://localhost:25560/api/v1/projects/2/configuration
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "yaml": "version: 2\n\nproject:\n  name: current\n  species: mouse\n\nworkflow:\n  steps:\n    - prepare\n\noutput:\n  format: json\n  path: ./output"
+}
+
+
+### ==========================================
+### 3. 测试超前/未知版本 (v999)
+### 预期:
+###   - Migration 不执行
+###   - 触发 Schema 校验失败，返回 400 Bad Request
+###   - 错误码: CONFIG_VALIDATION_FAILED
+###   - 错误信息包含: Unsupported configuration version 999
+### ==========================================
+PUT http://localhost:25560/api/v1/projects/2/configuration
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "yaml": "version: 999\n\nproject:\n  name: invalid"
+}

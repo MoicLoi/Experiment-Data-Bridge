@@ -1,0 +1,7 @@
+package me.moiclathy.edb.core.worker.docker.registry
+import java.net.URI
+import java.time.Instant
+data class DockerRegistryProfile(val id:String,val displayName:String,val registryUrl:String,val namespace:String?=null,val credentialRef:String?=null,val allowInsecure:Boolean=false,val isDefault:Boolean=false,val createdAt:Instant=Instant.now(),val updatedAt:Instant=createdAt){init{require(Regex("[a-z0-9][a-z0-9._-]{0,99}").matches(id));require(displayName.isNotBlank()&&displayName.length<=160);val uri=runCatching{URI(registryUrl)}.getOrNull();require(uri?.host!=null&&uri.scheme in setOf("https","http"));require(allowInsecure||uri.scheme=="https");require(namespace==null||Regex("[A-Za-z0-9][A-Za-z0-9._/-]{0,254}").matches(namespace));require(credentialRef==null||Regex("[A-Z][A-Z0-9_]{1,159}").matches(credentialRef)){"Credential reference must be an environment variable name."}}}
+data class DockerRegistryCredential(val username:String,val password:String)
+fun interface DockerRegistryCredentialResolver{fun resolve(reference:String):DockerRegistryCredential?}
+class EnvironmentDockerRegistryCredentialResolver(private val environment:(String)->String?=System::getenv):DockerRegistryCredentialResolver{override fun resolve(reference:String):DockerRegistryCredential?{val value=environment(reference)?.takeIf(String::isNotBlank)?:return null;val split=value.indexOf(':');require(split>0&&split<value.lastIndex){"Registry credential '$reference' must use username:password format."};return DockerRegistryCredential(value.substring(0,split),value.substring(split+1))}}

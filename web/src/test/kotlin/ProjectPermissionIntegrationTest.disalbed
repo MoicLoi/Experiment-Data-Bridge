@@ -1,0 +1,108 @@
+/*package me.moiclathy.edb.web
+
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.server.testing.*
+import kotlinx.serialization.json.Json
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
+import me.moiclathy.edb.core.config.loadConfig
+import me.moiclathy.edb.core.database.repository.UserRepository
+import me.moiclathy.edb.core.security.JwtService
+import me.moiclathy.edb.core.security.UserRole
+import me.moiclathy.edb.core.service.UserService
+import me.moiclathy.edb.web.plugin.DatabaseInitializer
+import me.moiclathy.edb.web.dto.ProjectResponse
+
+class `ProjectPermissionIntegrationTest.111111111` {
+
+    companion object {
+        lateinit var jwtService: JwtService
+        lateinit var userService: UserService
+
+        @JvmStatic
+        @BeforeAll
+        fun setup() {
+            // 1. 加载配置并初始化数据库连接
+            val config = loadConfig()
+            DatabaseInitializer().initialize(config)
+
+            val userRepository = UserRepository()
+            userService = UserService(userRepository)
+
+            // 2. 初始化 JwtService (请确保测试配置中的 secret 长度满足 >= 32 字节)
+            jwtService = JwtService(
+                secret = config.security.jwt.secret,
+                issuer = config.security.jwt.issuer,
+                audience = config.security.jwt.audience,
+                expiresIn = config.security.jwt.expiresIn
+            )
+
+            // 3. 确保持久化测试用户 admin 和 user1 存在
+            if (userRepository.findByUsername("admin") == null) {
+                userService.createUser("admin", "admin123", "Admin User", "admin@edb.com", UserRole.ADMIN)
+            }
+            if (userRepository.findByUsername("user1") == null) {
+                userService.createUser("user1", "password123", "User One", "user1@edb.com", UserRole.MEMBER)
+            }
+        }
+    }
+
+    // 后续的 @Test 方法保持不变...
+    @Test
+    fun testProjectIsolationAndOwnership() = testApplication {
+        application {
+            module()
+        }
+
+        val userRepository = UserRepository()
+        val adminId = userRepository.findIdByUsername("admin")!!
+        val user1Id = userRepository.findIdByUsername("user1")!!
+
+        // 生成对应用户的 Token
+        val adminToken = jwtService.generateToken(adminId, "admin", UserRole.ADMIN)
+        val user1Token = jwtService.generateToken(user1Id, "user1", UserRole.MEMBER)
+
+        // --- Step 1: Admin 创建 Project A ---
+        val createAdminProject = client.post("/api/v1/projects") {
+            header(HttpHeaders.Authorization, "Bearer $adminToken")
+            contentType(ContentType.Application.Json)
+            setBody("""{"name": "Project A", "description": "Admin project", "mode": "COLLABORATIVE", "configYaml": ""}""")
+        }
+        assertEquals(HttpStatusCode.Created, createAdminProject.status)
+
+        // --- Step 2: User1 创建 Project B ---
+        val createUser1Project = client.post("/api/v1/projects") {
+            header(HttpHeaders.Authorization, "Bearer $user1Token")
+            contentType(ContentType.Application.Json)
+            setBody("""{"name": "Project B", "description": "User1 project", "mode": "COLLABORATIVE", "configYaml": ""}""")
+        }
+        assertEquals(HttpStatusCode.Created, createUser1Project.status)
+
+        // --- Step 3: Admin 请求 GET /api/v1/projects，应该只能看到 Project A ---
+        val adminGetResponse = client.get("/api/v1/projects") {
+            header(HttpHeaders.Authorization, "Bearer $adminToken")
+        }
+        assertEquals(HttpStatusCode.OK, adminGetResponse.status)
+
+        val adminProjects = Json.decodeFromString<List<ProjectResponse>>(adminGetResponse.bodyAsText())
+        assertEquals(1, adminProjects.size)
+        assertEquals("Project A", adminProjects[0].name)
+        assertEquals(adminId, adminProjects[0].ownerId)
+
+        // --- Step 4: User1 请求 GET /api/v1/projects，应该只能看到 Project B ---
+        val user1GetResponse = client.get("/api/v1/projects") {
+            header(HttpHeaders.Authorization, "Bearer $user1Token")
+        }
+        assertEquals(HttpStatusCode.OK, user1GetResponse.status)
+
+        val user1Projects = Json.decodeFromString<List<ProjectResponse>>(user1GetResponse.bodyAsText())
+        assertEquals(1, user1Projects.size)
+        assertEquals("Project B", user1Projects[0].name)
+        assertEquals(user1Id, user1Projects[0].ownerId)
+    }
+}
+*/
+

@@ -1,0 +1,65 @@
+package me.moiclathy.edb.core.git
+
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
+
+class GitHistoryServiceTest {
+
+    private lateinit var repositoryService: GitRepositoryService
+    private lateinit var commitService: GitCommitService
+    private lateinit var historyService: GitHistoryService
+
+    @BeforeEach
+    fun setUp() {
+        repositoryService = GitRepositoryService()
+        commitService = GitCommitService(repositoryService)
+        historyService = GitHistoryService(repositoryService)
+    }
+
+    @Test
+    fun `test history returns commits in reverse chronological order with correct count`(@TempDir tempDir: Path) {
+        val projectId = 3000
+        val author = "TestUser"
+
+        // 1. 初始化仓库
+        repositoryService.initialize(projectId)
+
+        // 2. 依次提交三次
+        commitService.commit(projectId, "version: 1", "version1", author)
+        commitService.commit(projectId, "version: 2", "version2", author)
+        commitService.commit(projectId, "version: 3", "version3", author)
+
+        // 3. 调用 history 服务获取 DTO 列表
+        val history = historyService.history(projectId)
+
+        // 4. 验证总数量
+        assertEquals(3, history.size, "Should have exactly 3 commits")
+
+        // 5. 验证默认倒序（最新的是 version3，排在 first）
+        assertEquals("version3", history.first().message)
+        assertEquals("version1", history.last().message)
+    }
+
+    @Test
+    fun `test history pagination limit`(@TempDir tempDir: Path) {
+        val projectId = 4000
+        val author = "TestUser"
+
+        repositoryService.initialize(projectId)
+
+        // 提交三次
+        commitService.commit(projectId, "v1", "commit1", author)
+        commitService.commit(projectId, "v2", "commit2", author)
+        commitService.commit(projectId, "v3", "commit3", author)
+
+        // 验证 limit 分页参数生效（只取前 2 条）
+        val limitedHistory = historyService.history(projectId, limit = 2)
+
+        assertEquals(2, limitedHistory.size, "Should respect the limit parameter")
+        assertEquals("commit3", limitedHistory[0].message, "Latest commit should be first")
+        assertEquals("commit2", limitedHistory[1].message)
+    }
+}

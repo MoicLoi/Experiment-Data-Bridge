@@ -1,0 +1,19 @@
+### 变量定义（可以切换环境）
+@baseUrl = http://localhost:25560/api/v1
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODYyNzg3NDUsImV4cCI6MTc4NjM2NTE0NX0.PjCwF-chbMYW69BK39gxCh3txMOCH-7gWBzaWogPWW4
+
+### 1. 查询所有审计日志（带分页和筛选测试）
+GET {{baseUrl}}/audit?page=0&pageSize=10
+Authorization: {{token}}
+
+### 2. 根据 ID 查询审计日志
+GET {{baseUrl}}/audit/1
+Authorization: {{token}}
+
+### 3. 查询不存在的审计日志（预期返回 404）
+GET {{baseUrl}}/audit/999
+Authorization: {{token}}
+
+### 4. 传入非法的 ID（预期返回 400）
+GET {{baseUrl}}/audit/abc
+Authorization: {{token}}

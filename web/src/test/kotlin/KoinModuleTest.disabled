@@ -1,0 +1,37 @@
+import me.moiclathy.edb.web.di.edbModules
+import org.junit.jupiter.api.Test
+import org.koin.test.KoinTest
+import org.koin.test.verify.verify
+
+class KoinModuleTest : KoinTest {
+
+    @Test
+    fun verifyKoinConfiguration() {
+        edbModules.forEach { module ->
+            module.verify(
+                extraTypes = listOf(
+                    // 1. 配置类及子项
+                    me.moiclathy.edb.core.config.AppConfig::class,
+                    me.moiclathy.edb.core.config.ServerConfig::class,
+                    me.moiclathy.edb.core.config.DatabaseConfig::class,
+                    me.moiclathy.edb.core.config.StorageConfig::class,
+                    me.moiclathy.edb.core.config.SecurityConfig::class,
+                    me.moiclathy.edb.core.config.AgentConfig::class,
+                    me.moiclathy.edb.core.config.LoggingConfig::class,
+                    me.moiclathy.edb.core.config.KtorConfig::class,
+                    me.moiclathy.edb.core.config.ApiConfig::class,
+                    me.moiclathy.edb.core.config.PoolConfig::class,
+                    me.moiclathy.edb.core.config.InitialAdminConfig::class,
+
+                    // 2. 集合与策略依赖定义
+                    me.moiclathy.edb.core.config.schema.ConfigSchemaDefinition::class,
+                    me.moiclathy.edb.core.config.migration.ConfigMigration::class,
+
+                    // 3. 仓储与映射接口（放行静态扫描）
+                    me.moiclathy.edb.core.database.repository.ProjectRepository::class,
+                    me.moiclathy.edb.core.config.mapper.ProjectConfigMapper::class
+                )
+            )
+        }
+    }
+}

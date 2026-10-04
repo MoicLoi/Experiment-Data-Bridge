@@ -1,0 +1,51 @@
+src-tauri/target 一般建议直接删除，不值得为了迁移去压缩保留。
+
+它本质上和 Gradle 的 build/ 很像，里面主要是 Rust/Tauri 编译产物：
+
+src-tauri/target/
+├── debug/
+├── release/
+├── deps/
+├── incremental/
+├── build/
+└── ...
+
+这些都可以通过重新：
+
+cargo build
+
+或者：
+
+npm run tauri build
+
+重新生成。
+
+迁移时真正应该保留的是：
+
+src-tauri/
+├── Cargo.toml
+├── Cargo.lock
+├── tauri.conf.json / tauri.conf.json5
+├── capabilities/
+├── icons/
+├── src/
+├── build.rs
+└── migrations / resources（如果有）
+
+所以如果你的目标是源码级完整迁移，推荐：
+
+src-tauri/target 直接删。
+
+唯一例外是：里面有你明确想保留的已经构建好的最终安装包，例如：
+
+src-tauri/target/release/bundle/
+
+这里可能有：
+
+*.msi
+*.exe
+*.nsis.zip
+
+如果这些版本以后可能还要用，可以只把 bundle/ 里的最终产物单独拷出来，再把整个 target 删除。
+
+比较理想的清理方式：

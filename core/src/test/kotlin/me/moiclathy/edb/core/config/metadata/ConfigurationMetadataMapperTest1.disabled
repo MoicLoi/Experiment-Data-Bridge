@@ -1,0 +1,189 @@
+package me.moiclathy.edb.core.config.metadata
+
+import me.moiclathy.edb.core.config.metadata.model.ConfigurationMetadata
+import me.moiclathy.edb.core.config.metadata.persistence.ConfigurationMetadataMapper
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import java.time.Instant
+
+class ConfigurationMetadataMapperTest {
+
+    private val timestamp =
+        Instant.parse(
+            "2026-08-09T12:00:00Z"
+        )
+
+    @Test
+    fun `should map model to entity`() {
+
+        val metadata =
+            ConfigurationMetadata(
+                projectId = 1,
+                description = "Animal experiment configuration",
+                category = "experiment",
+                tags = listOf(
+                    "animal",
+                    "experiment",
+                    "veterinary"
+                ),
+                updatedAt = timestamp,
+                dataSource = "manual"
+            )
+
+        val entity =
+            ConfigurationMetadataMapper.toEntity(
+                metadata
+            )
+
+        assertEquals(
+            1,
+            entity.projectId
+        )
+
+        assertEquals(
+            "Animal experiment configuration",
+            entity.description
+        )
+
+        assertEquals(
+            "experiment",
+            entity.category
+        )
+
+        assertEquals(
+            """["animal","experiment","veterinary"]""",
+            entity.tags
+        )
+
+        assertEquals(
+            timestamp,
+            entity.updatedAt
+        )
+
+        assertEquals(
+            "manual",
+            entity.dataSource
+        )
+    }
+
+    @Test
+    fun `should map entity to model`() {
+
+        val entity =
+            me.moiclathy.edb.core.config.metadata.persistence.ConfigurationMetadataEntity(
+                projectId = 2,
+                description = "Imported configuration",
+                category = "import",
+                tags = """["imported","edb","package"]""",
+                updatedAt = timestamp,
+                dataSource = "package"
+            )
+
+        val metadata =
+            ConfigurationMetadataMapper.toModel(
+                entity
+            )
+
+        assertEquals(
+            2,
+            metadata.projectId
+        )
+
+        assertEquals(
+            "Imported configuration",
+            metadata.description
+        )
+
+        assertEquals(
+            "import",
+            metadata.category
+        )
+
+        assertEquals(
+            listOf(
+                "imported",
+                "edb",
+                "package"
+            ),
+            metadata.tags
+        )
+
+        assertEquals(
+            timestamp,
+            metadata.updatedAt
+        )
+
+        assertEquals(
+            "package",
+            metadata.dataSource
+        )
+    }
+
+    @Test
+    fun `should preserve empty tags`() {
+
+        val metadata =
+            ConfigurationMetadata(
+                projectId = 3,
+                description = null,
+                category = null,
+                tags = emptyList(),
+                updatedAt = timestamp,
+                dataSource = null
+            )
+
+        val entity =
+            ConfigurationMetadataMapper.toEntity(
+                metadata
+            )
+
+        assertEquals(
+            "[]",
+            entity.tags
+        )
+
+        val restored =
+            ConfigurationMetadataMapper.toModel(
+                entity
+            )
+
+        assertTrue(
+            restored.tags.isEmpty()
+        )
+    }
+
+    @Test
+    fun `should preserve special characters in tags`() {
+
+        val metadata =
+            ConfigurationMetadata(
+                projectId = 4,
+                description = "Special characters",
+                category = "test",
+                tags = listOf(
+                    "animal science",
+                    "中文",
+                    "tag\"test",
+                    "a/b"
+                ),
+                updatedAt = timestamp,
+                dataSource = "manual"
+            )
+
+        val entity =
+            ConfigurationMetadataMapper.toEntity(
+                metadata
+            )
+
+        val restored =
+            ConfigurationMetadataMapper.toModel(
+                entity
+            )
+
+        assertEquals(
+            metadata.tags,
+            restored.tags
+        )
+    }
+}

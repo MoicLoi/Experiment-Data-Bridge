@@ -1,0 +1,78 @@
+package me.moiclathy.edb.core.git
+
+import me.moiclathy.edb.core.git.exception.GitRepositoryInitException
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
+import java.nio.file.Path
+
+class GitRepositoryServiceTest {
+
+    private lateinit var gitRepositoryService: GitRepositoryService
+
+    @BeforeEach
+    fun setUp() {
+        gitRepositoryService = GitRepositoryService()
+    }
+
+    @Test
+    fun `test exists should return false when repository does not exist`(@TempDir tempDir: Path) {
+        // 验证一个全新的、从未初始化过的 projectId，exists 应该返回 false
+        val projectId = 1
+        val exists = gitRepositoryService.exists(projectId)
+
+        assertFalse(exists, "Newly created project directory should not have a .git repository yet")
+    }
+
+    @Test
+    fun `test initialize and exists workflow`(@TempDir tempDir: Path) {
+        val projectId = 100
+
+        // 1. 初始化前应不存在
+        assertFalse(gitRepositoryService.exists(projectId))
+
+        // 2. 执行初始化
+        gitRepositoryService.initialize(projectId)
+
+        // 3. 初始化后 exists 应该返回 true
+        assertTrue(gitRepositoryService.exists(projectId), "Repository should exist after initialization")
+
+        // 4. 验证 .git 目录和项目目录结构是否符合 0.19.2 预期
+        val projectDir = GitPaths.projectDirectory(projectId)
+        val gitDir = GitPaths.gitDirectory(projectId)
+
+        assertTrue(Files.isDirectory(projectDir), "Project directory should be created")
+        assertTrue(Files.isDirectory(gitDir), ".git directory should be created by JGit")
+    }
+
+    @Test
+    fun `test initialize is idempotent`(@TempDir tempDir: Path) {
+        val projectId = 200
+
+        // 连续初始化两次，不应抛出异常（幂等性验证）
+        gitRepositoryService.initialize(projectId)
+        assertTrue(gitRepositoryService.exists(projectId))
+
+        // 再次调用应该直接 return
+        assertDoesNotThrow {
+            gitRepositoryService.initialize(projectId)
+        }
+        assertTrue(gitRepositoryService.exists(projectId))
+    }
+
+    @Test
+    fun `test open repository successfully`(@TempDir tempDir: Path) {
+        val projectId = 300
+
+        // 调用 open，内部应自动触发 initialize
+        val git = gitRepositoryService.open(projectId)
+
+        assertNotNull(git, "Opened Git instance should not be null")
+        assertTrue(gitRepositoryService.exists(projectId), "Opening should have initialized the repository")
+
+        // 关闭 JGit 资源
+        git.close()
+    }
+}

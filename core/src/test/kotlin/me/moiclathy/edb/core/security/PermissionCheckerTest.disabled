@@ -1,0 +1,142 @@
+package me.moiclathy.edb.core.security
+
+import me.moiclathy.edb.core.security.exception.PermissionDeniedException
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Test
+
+class PermissionCheckerTest {
+
+    private val checker =
+        PermissionChecker()
+
+    @Test
+    fun `admin should have merge permission`() {
+
+        assertTrue(
+            checker.hasPermission(
+                username = "admin",
+                permission = Permission.CONFIGURATION_MERGE
+            )
+        )
+    }
+
+    @Test
+    fun `admin should have compare permission`() {
+
+        assertTrue(
+            checker.hasPermission(
+                username = "admin",
+                permission = Permission.CONFIGURATION_COMPARE
+            )
+        )
+    }
+
+    @Test
+    fun `admin should have snapshot read permission`() {
+
+        assertTrue(
+            checker.hasPermission(
+                username = "admin",
+                permission = Permission.SNAPSHOT_READ
+            )
+        )
+    }
+
+    @Test
+    fun `admin should have snapshot create permission`() {
+
+        assertTrue(
+            checker.hasPermission(
+                username = "admin",
+                permission = Permission.SNAPSHOT_CREATE
+            )
+        )
+    }
+
+    @Test
+    fun `admin should have snapshot delete permission`() {
+
+        assertTrue(
+            checker.hasPermission(
+                username = "admin",
+                permission = Permission.SNAPSHOT_DELETE
+            )
+        )
+    }
+
+    @Test
+    fun `normal user should not have merge permission`() {
+
+        assertFalse(
+            checker.hasPermission(
+                username = "test-user",
+                permission = Permission.CONFIGURATION_MERGE
+            )
+        )
+    }
+
+    @Test
+    fun `normal user should not have compare permission`() {
+
+        assertFalse(
+            checker.hasPermission(
+                username = "test-user",
+                permission = Permission.CONFIGURATION_COMPARE
+            )
+        )
+    }
+
+    @Test
+    fun `normal user should not have snapshot create permission`() {
+
+        assertFalse(
+            checker.hasPermission(
+                username = "test-user",
+                permission = Permission.SNAPSHOT_CREATE
+            )
+        )
+    }
+
+    @Test
+    fun `requirePermission should throw when permission is denied`() {
+        var thrown = false
+
+        try {
+            checker.requirePermission(
+                username = "test-user",
+                permission = Permission.CONFIGURATION_MERGE,
+                projectId = 1
+            )
+        } catch (e: Exception) {
+            // 只要捕获到了异常，并且内容符合预期，测试就通过
+            thrown = true
+            assertTrue(e.message!!.contains("test-user"))
+        }
+
+        // 如果没抛异常，直接让测试失败
+        assertTrue(thrown, "Expected an exception to be thrown")
+    }
+
+    @Test
+    fun `requirePermission should allow admin`() {
+
+        checker.requirePermission(
+            username = "admin",
+            permission = Permission.CONFIGURATION_MERGE,
+            projectId = 1
+        )
+    }
+
+    @Test
+    fun `blank username should be denied`() {
+
+        assertFalse(
+            checker.hasPermission(
+                username = "",
+                permission = Permission.CONFIGURATION_MERGE
+            )
+        )
+    }
+}

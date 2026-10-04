@@ -1,0 +1,75 @@
+package me.moiclathy.edb.core.service
+
+import io.mockk.*
+import me.moiclathy.edb.core.config.migration.ConfigMigrationManager
+import me.moiclathy.edb.core.config.migration.ConfigVersionReader
+import me.moiclathy.edb.core.config.schema.ConfigSchemaValidator
+import me.moiclathy.edb.core.git.GitCommitInfo
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import java.time.Instant
+
+class ProjectConfigurationImportServiceTest {
+
+    @Test
+    fun shouldImportWithoutMigration() {
+
+        val reader = mockk<ConfigVersionReader>()
+        val validator = mockk<ConfigSchemaValidator>(relaxUnitFun = true)
+        val migration = mockk<ConfigMigrationManager>()
+        val saveService = mockk<ProjectConfigurationService>()
+
+        // 2. 对 validator 打桩，使其默认验证通过（不抛异常）
+        every { validator.validate(any()) }
+        every { reader.readVersion(any()) } returns 1
+        every { migration.migrate(any(), any()) } answers { firstArg() }
+
+        val commit =
+            GitCommitInfo(
+                commitId = "abc",
+                shortCommitId = "abc",
+                message = "import",
+                author = "admin",
+                time = Instant.now(),
+                email = "admin@edb.local"
+            )
+
+        every {
+            saveService.saveConfiguration(
+                any(),
+                any(),
+                any(),
+                any()
+            )
+        } returns commit
+
+        val service = ProjectConfigurationImportService(
+            validator = validator,
+            migrationManager = migration,
+            configurationService = saveService,
+            versionReader = reader
+        )
+
+        val result =
+            service.importConfiguration(
+                projectId = 1,
+                userId = 1,
+                yaml = "version: 1",
+                author = "admin"
+            )
+
+        assertEquals(
+            "abc",
+            result.commitId
+        )
+
+        verify {
+            saveService.saveConfiguration(
+                1,
+                1,
+                "version: 1",
+                "admin"
+            )
+        }
+    }
+}

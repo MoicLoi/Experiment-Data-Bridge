@@ -1,0 +1,28 @@
+task:
+  analysis:
+    worker-mode: MANAGED_DOCKER
+    external-http-handlers:
+      - enabled: true
+        handler-id: r-statistical-summary
+        analysis-type: statistics
+        tool: r-http
+        endpoint: http://127.0.0.1:8001/analyze
+        output-format: JSON
+        bearer-token: replace-me
+    docker-worker:
+      image: edb/r-worker:dev
+      worker-kind: r-http
+      container-name: edb-r-worker
+      host: 127.0.0.1
+      bind-address: 127.0.0.1
+      host-port: 8001
+      container-port: 8001
+      health-path: /health
+      bearer-token: replace-me
+  report:
+    r-http:
+      enabled: true
+      generator-id: r-tabular-summary-report
+      endpoint: http://127.0.0.1:8001/analyze
+      output-formats: [PDF]
+      bearer-token: replace-me

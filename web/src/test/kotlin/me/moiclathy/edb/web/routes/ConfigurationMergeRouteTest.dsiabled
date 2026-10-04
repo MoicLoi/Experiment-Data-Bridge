@@ -1,0 +1,335 @@
+package me.moiclathy.edb.web.routes
+
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
+import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.server.application.Application
+import io.ktor.server.auth.Authentication
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.routing.routing
+import io.ktor.server.testing.testApplication
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.install
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.serialization.json.Json
+import me.moiclathy.edb.core.config.merge.MergeStrategy
+import me.moiclathy.edb.core.config.merge.model.ConfigurationMergeResult
+import me.moiclathy.edb.core.config.merge.service.ConfigurationMergeService
+import me.moiclathy.edb.core.config.snapshot.model.ConfigurationSnapshot
+import me.moiclathy.edb.core.config.snapshot.model.SnapshotMetadata
+import me.moiclathy.edb.web.routes.project.projectConfigurationMergeRoutes
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.koin.dsl.module
+import org.koin.ktor.plugin.Koin
+import java.time.Instant
+
+class ConfigurationMergeRouteTest {
+
+    private val mergeService =
+        mockk<ConfigurationMergeService>()
+
+    private fun Application.configureTestModule() {
+
+        install(ContentNegotiation) {
+            json(
+                Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                }
+            )
+        }
+
+        install(Authentication) {
+
+            provider("auth-jwt") {
+
+                authenticate { context ->
+
+                    val token =
+                        JWT.create()
+                            .withSubject("admin")
+                            .sign(
+                                Algorithm.HMAC256("test")
+                            )
+
+                    val payload =
+                        JWT.decode(token)
+
+                    context.principal(
+                        JWTPrincipal(payload)
+                    )
+                }
+            }
+        }
+
+        install(Koin) {
+
+            modules(
+                module {
+                    single {
+                        mergeService
+                    }
+                }
+            )
+        }
+
+        routing {
+            projectConfigurationMergeRoutes()
+        }
+    }
+
+    private fun snapshot(
+        id: Long,
+        projectId: Int,
+        yaml: String
+    ): ConfigurationSnapshot {
+
+        return ConfigurationSnapshot(
+            id = id,
+            projectId = projectId,
+            version = 1,
+            metadata = SnapshotMetadata(
+                createdAt = Instant.now(),
+                createdBy = "test"
+            ),
+            yaml = yaml
+        )
+    }
+
+    @Test
+    fun `should merge snapshots successfully`() =
+        testApplication {
+
+            application {
+                configureTestModule()
+            }
+
+            val target =
+                snapshot(
+                    id = 1,
+                    projectId = 100,
+                    yaml = "server:\n  port: 8080"
+                )
+
+            val source =
+                snapshot(
+                    id = 2,
+                    projectId = 100,
+                    yaml = "server:\n  port: 9090"
+                )
+
+            every {
+                mergeService.mergeSnapshots(
+                    targetSnapshotId = 1,
+                    sourceSnapshotId = 2,
+                    strategy = MergeStrategy.FAIL_ON_CONFLICT
+                )
+            } returns ConfigurationMergeResult.success(
+                target = target,
+                source = source,
+                yaml = """
+                    server:
+                      port: 9090
+                """.trimIndent()
+            )
+
+            val response =
+                client.post(
+                    "/api/v1/projects/100/config/merge"
+                ) {
+
+                    bearerAuth("test-token")
+
+                    contentType(
+                        ContentType.Application.Json
+                    )
+
+                    setBody(
+                        """
+                        {
+                          "targetSnapshotId": 1,
+                          "sourceSnapshotId": 2,
+                          "strategy": "DEFAULT"
+                        }
+                        """.trimIndent()
+                    )
+                }
+
+            assertEquals(
+                HttpStatusCode.OK,
+                response.status
+            )
+
+            assertTrue(
+                response.bodyAsText()
+                    .contains("mergedYaml")
+            )
+        }
+
+    @Test
+    fun `should return conflict when merge has conflicts`() =
+        testApplication {
+
+            application {
+                configureTestModule()
+            }
+
+            val target =
+                snapshot(
+                    id = 1,
+                    projectId = 100,
+                    yaml = "server:\n  port: 8080"
+                )
+
+            val source =
+                snapshot(
+                    id = 2,
+                    projectId = 100,
+                    yaml = "server:\n  port: 9090"
+                )
+
+            every {
+                mergeService.mergeSnapshots(
+                    targetSnapshotId = 1,
+                    sourceSnapshotId = 2,
+                    strategy = MergeStrategy.FAIL_ON_CONFLICT
+                )
+            } returns ConfigurationMergeResult.conflict(
+                target = target,
+                source = source,
+                conflicts = emptyList()
+            )
+
+            val response =
+                client.post(
+                    "/api/v1/projects/100/config/merge"
+                ) {
+
+                    bearerAuth("test-token")
+
+                    contentType(
+                        ContentType.Application.Json
+                    )
+
+                    setBody(
+                        """
+                        {
+                          "targetSnapshotId": 1,
+                          "sourceSnapshotId": 2
+                        }
+                        """.trimIndent()
+                    )
+                }
+
+            assertEquals(
+                HttpStatusCode.Conflict,
+                response.status
+            )
+        }
+
+    @Test
+    fun `should reject invalid project id`() =
+        testApplication {
+
+            application {
+                configureTestModule()
+            }
+
+            val response =
+                client.post(
+                    "/api/v1/projects/0/config/merge"
+                ) {
+
+                    bearerAuth("test-token")
+
+                    contentType(
+                        ContentType.Application.Json
+                    )
+
+                    setBody(
+                        """
+                        {
+                          "targetSnapshotId": 1,
+                          "sourceSnapshotId": 2
+                        }
+                        """.trimIndent()
+                    )
+                }
+
+            assertEquals(
+                HttpStatusCode.BadRequest,
+                response.status
+            )
+        }
+
+    @Test
+    fun `should reject project mismatch`() =
+        testApplication {
+
+            application {
+                configureTestModule()
+            }
+
+            val target =
+                snapshot(
+                    id = 1,
+                    projectId = 100,
+                    yaml = "server:\n  port: 8080"
+                )
+
+            val source =
+                snapshot(
+                    id = 2,
+                    projectId = 100,
+                    yaml = "server:\n  port: 9090"
+                )
+
+            every {
+                mergeService.mergeSnapshots(
+                    targetSnapshotId = 1,
+                    sourceSnapshotId = 2,
+                    strategy = MergeStrategy.FAIL_ON_CONFLICT
+                )
+            } returns ConfigurationMergeResult.success(
+                target = target,
+                source = source,
+                yaml = "server:\n  port: 9090"
+            )
+
+            val response =
+                client.post(
+                    "/api/v1/projects/999/config/merge"
+                ) {
+
+                    bearerAuth("test-token")
+
+                    contentType(
+                        ContentType.Application.Json
+                    )
+
+                    setBody(
+                        """
+                        {
+                          "targetSnapshotId": 1,
+                          "sourceSnapshotId": 2
+                        }
+                        """.trimIndent()
+                    )
+                }
+
+            assertEquals(
+                HttpStatusCode.NotFound,
+                response.status
+            )
+        }
+}

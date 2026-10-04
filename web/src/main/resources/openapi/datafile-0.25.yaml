@@ -1,0 +1,758 @@
+openapi: 3.0.3
+info:
+  title: Experiment Data Bridge DataFile API
+  version: 0.25.0
+  description: |
+    Unified contracts for DataFile upload, discovery and download, asynchronous
+    format conversion, and report definition and artifact generation.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: DataFiles
+  - name: Conversion
+  - name: Reports
+  - name: Analyses
+paths:
+  /projects/{projectId}/data-files:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      tags: [DataFiles]
+      operationId: uploadDataFile
+      summary: Upload and persist a project DataFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Uploaded DataFile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+    get:
+      tags: [DataFiles]
+      operationId: listProjectDataFiles
+      summary: List all DataFiles in a project
+      responses:
+        '200':
+          description: Project DataFiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DataFileResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/data-files/{dataFileId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DataFileId'
+    get:
+      tags: [DataFiles]
+      operationId: getDataFile
+      summary: Get a persisted DataFile descriptor
+      responses:
+        '200':
+          description: DataFile descriptor
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [DataFiles]
+      operationId: deleteDataFile
+      summary: Mark a DataFile deleted and remove its stored content
+      description: Idempotent for an existing DataFile; repeated calls retry physical content cleanup.
+      responses:
+        '200':
+          description: DataFile descriptor with status DELETED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /projects/{projectId}/data-files/{dataFileId}/download:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DataFileId'
+    get:
+      tags: [DataFiles]
+      operationId: downloadDataFile
+      summary: Stream the stored DataFile content
+      responses:
+        '200':
+          description: DataFile byte stream; Content-Type reflects the persisted media type
+          headers:
+            Content-Disposition:
+              schema: { type: string, example: 'attachment; filename="observations.csv"' }
+            Content-Length:
+              schema: { type: integer, format: int64 }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/data-files/{dataFileId}/conversion-targets:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DataFileId'
+    get:
+      tags: [Conversion]
+      operationId: listDataFileConversionTargets
+      summary: Discover registered conversion targets and their options
+      responses:
+        '200':
+          description: Conversion capabilities for the source format
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DataFileConversionCapabilityResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/data-files/{dataFileId}/conversions:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DataFileId'
+    post:
+      tags: [Conversion]
+      operationId: submitDataFileConversion
+      summary: Submit an asynchronous DataFile conversion task
+      description: Poll `/tasks/{taskId}` or use the Task SSE API for lifecycle updates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitDataFileConversionRequest' }
+      responses:
+        '202':
+          description: Conversion task accepted and queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    get:
+      tags: [Conversion]
+      operationId: listDataFileConversionArtifacts
+      summary: List conversion artifacts directly derived from a source DataFile
+      responses:
+        '200':
+          description: Conversion artifacts ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DataFileResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/reports/definitions:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      tags: [Reports]
+      operationId: listReportDefinitions
+      summary: List loaded report definitions available to a project
+      responses:
+        '200':
+          description: Registered report definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReportDefinitionResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/reports:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      tags: [Reports]
+      operationId: submitReportTask
+      summary: Submit an asynchronous report generation task
+      description: The completed Task result contains the generated report DataFile ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitReportTaskRequest' }
+      responses:
+        '202':
+          description: Report task accepted and queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/data-files/{dataFileId}/reports:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DataFileId'
+    get:
+      tags: [Reports]
+      operationId: listDataFileReportArtifacts
+      summary: List report artifacts directly generated from a source DataFile
+      responses:
+        '200':
+          description: Report artifacts ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DataFileResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/analysis-handlers:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      tags: [Analyses]
+      operationId: listAnalysisHandlers
+      summary: List configured analysis handlers available to a project
+      responses:
+        '200':
+          description: Registered analysis handler capabilities
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AnalysisHandlerResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/analyses:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      tags: [Analyses]
+      operationId: submitAnalysisTask
+      summary: Submit an asynchronous analysis task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitAnalysisTaskRequest' }
+      responses:
+        '202':
+          description: Analysis task accepted and queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectId}/data-files/{dataFileId}/analyses:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DataFileId'
+    get:
+      tags: [Analyses]
+      operationId: listDataFileAnalysisArtifacts
+      summary: List analysis artifacts directly derived from a source DataFile
+      responses:
+        '200':
+          description: Analysis artifacts ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DataFileResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/data-file-orphan-cleanup:
+    get:
+      tags: [DataFiles]
+      operationId: getDataFileOrphanCleanupOverview
+      summary: Get orphan cleanup policy and current runtime state
+      responses:
+        '200':
+          description: Orphan cleanup policy and state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileOrphanCleanupOverviewResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/data-file-orphan-cleanup/estimate:
+    get:
+      tags: [DataFiles]
+      operationId: estimateDataFileOrphanCleanup
+      summary: Scan and estimate eligible orphan content without deleting it
+      responses:
+        '200':
+          description: Current orphan estimate
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileOrphanCleanupEstimateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/data-file-orphan-cleanup/cleanup:
+    post:
+      tags: [DataFiles]
+      operationId: runDataFileOrphanCleanup
+      summary: Trigger an orphan cleanup run immediately
+      responses:
+        '200':
+          description: Completed cleanup result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileOrphanCleanupResultResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/data-file-orphan-cleanup/last-result:
+    get:
+      tags: [DataFiles]
+      operationId: getLastDataFileOrphanCleanupResult
+      summary: Get current state and the latest cleanup outcome
+      responses:
+        '200':
+          description: Current cleanup manager state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileOrphanCleanupStateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/data-file-retention:
+    get:
+      tags: [DataFiles]
+      operationId: getDataFileRetentionOverview
+      summary: Get DataFile retention policy and runtime state
+      responses:
+        '200':
+          description: Retention policy and state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileRetentionOverviewResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/data-file-retention/estimate:
+    get:
+      tags: [DataFiles]
+      operationId: estimateDataFileRetention
+      summary: Count expired DELETED DataFile records without removing them
+      responses:
+        '200':
+          description: Retention estimate
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileRetentionEstimateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/data-file-retention/cleanup:
+    post:
+      tags: [DataFiles]
+      operationId: runDataFileRetention
+      summary: Permanently delete expired DELETED DataFile records
+      responses:
+        '200':
+          description: Retention cleanup result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileRetentionResultResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/data-file-retention/last-result:
+    get:
+      tags: [DataFiles]
+      operationId: getLastDataFileRetentionResult
+      summary: Get current retention state and the latest result
+      responses:
+        '200':
+          description: Current retention manager state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataFileRetentionStateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    DataFileId:
+      name: dataFileId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+  responses:
+    BadRequest:
+      description: Invalid format, request body, option, or task policy
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Missing or invalid JWT
+    Forbidden:
+      description: Insufficient project access
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Project, DataFile, or report resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    PayloadTooLarge:
+      description: Upload exceeds the configured maximum size
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: An orphan cleanup run is already active
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    InternalError:
+      description: DataFile was marked DELETED but physical content cleanup failed and can be retried
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    AnalysisHandlerResponse:
+      type: object
+      required: [id, analysisType, tool, outputFormat]
+      properties:
+        id: { type: string }
+        analysisType: { type: string }
+        tool: { type: string }
+        outputFormat: { $ref: '#/components/schemas/DataFileFormat' }
+        capability: { $ref: '#/components/schemas/AnalysisCapabilityMetadataResponse', nullable: true }
+    AnalysisCapabilityMetadataResponse:
+      type: object
+      required: [sourceType, sourceId, sourceVersion, titleKey, cliPath]
+      properties:
+        sourceType: { type: string }
+        sourceId: { type: string }
+        sourceVersion: { type: string }
+        titleKey: { type: string }
+        descriptionKey: { type: string, nullable: true }
+        cliPath:
+          type: array
+          items: { type: string }
+    SubmitAnalysisTaskRequest:
+      type: object
+      required: [handlerId, sourceDataFileIds]
+      properties:
+        handlerId: { type: string, minLength: 1 }
+        sourceDataFileIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+        parameters:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+        priority: { type: integer, minimum: 0, maximum: 100, default: 50 }
+        retry: { $ref: '#/components/schemas/TaskRetryPolicyRequest' }
+        timeoutMs: { type: integer, format: int64, minimum: 1, nullable: true }
+    DataFileRetentionPolicyResponse:
+      type: object
+      required: [enabled, retentionDays, cleanupIntervalMinutes, batchSize, maxBatchesPerRun]
+      properties:
+        enabled: { type: boolean }
+        retentionDays: { type: integer, format: int64, minimum: 1 }
+        cleanupIntervalMinutes: { type: integer, format: int64, minimum: 1 }
+        batchSize: { type: integer, minimum: 1, maximum: 10000 }
+        maxBatchesPerRun: { type: integer, minimum: 1, maximum: 1000 }
+    DataFileRetentionResultResponse:
+      type: object
+      required: [cutoff, deletedRecords, completedBatches, completedAt]
+      properties:
+        cutoff: { type: string, format: date-time }
+        deletedRecords: { type: integer, minimum: 0 }
+        completedBatches: { type: integer, minimum: 0 }
+        completedAt: { type: string, format: date-time }
+    DataFileRetentionStateResponse:
+      type: object
+      required: [running]
+      properties:
+        running: { type: boolean }
+        lastStartedAt: { type: string, format: date-time, nullable: true }
+        lastResult:
+          allOf: [{ $ref: '#/components/schemas/DataFileRetentionResultResponse' }]
+          nullable: true
+        lastFailure: { type: string, nullable: true }
+    DataFileRetentionOverviewResponse:
+      type: object
+      required: [policy, state]
+      properties:
+        policy: { $ref: '#/components/schemas/DataFileRetentionPolicyResponse' }
+        state: { $ref: '#/components/schemas/DataFileRetentionStateResponse' }
+    DataFileRetentionEstimateResponse:
+      type: object
+      required: [cutoff, expiredDeletedFiles, collectedAt]
+      properties:
+        cutoff: { type: string, format: date-time }
+        expiredDeletedFiles: { type: integer, format: int64, minimum: 0 }
+        collectedAt: { type: string, format: date-time }
+    DataFileOrphanCleanupPolicyResponse:
+      type: object
+      required: [enabled, minimumAgeHours, cleanupIntervalMinutes, maxDeletesPerRun]
+      properties:
+        enabled: { type: boolean }
+        minimumAgeHours: { type: integer, format: int64, minimum: 1 }
+        cleanupIntervalMinutes: { type: integer, format: int64, minimum: 1 }
+        maxDeletesPerRun: { type: integer, minimum: 1, maximum: 100000 }
+    DataFileOrphanCleanupResultResponse:
+      type: object
+      required: [cutoff, scannedFiles, orphanCandidates, deletedFiles, deletedBytes, failures, completedAt]
+      properties:
+        cutoff: { type: string, format: date-time }
+        scannedFiles: { type: integer, minimum: 0 }
+        orphanCandidates: { type: integer, minimum: 0 }
+        deletedFiles: { type: integer, minimum: 0 }
+        deletedBytes: { type: integer, format: int64, minimum: 0 }
+        failures: { type: integer, minimum: 0 }
+        completedAt: { type: string, format: date-time }
+    DataFileOrphanCleanupStateResponse:
+      type: object
+      required: [running]
+      properties:
+        running: { type: boolean }
+        lastStartedAt: { type: string, format: date-time, nullable: true }
+        lastResult:
+          allOf: [{ $ref: '#/components/schemas/DataFileOrphanCleanupResultResponse' }]
+          nullable: true
+        lastFailure: { type: string, nullable: true }
+    DataFileOrphanCleanupOverviewResponse:
+      type: object
+      required: [policy, state]
+      properties:
+        policy: { $ref: '#/components/schemas/DataFileOrphanCleanupPolicyResponse' }
+        state: { $ref: '#/components/schemas/DataFileOrphanCleanupStateResponse' }
+    DataFileOrphanCleanupEstimateResponse:
+      type: object
+      required: [cutoff, scannedFiles, orphanFiles, orphanBytes, collectedAt]
+      properties:
+        cutoff: { type: string, format: date-time }
+        scannedFiles: { type: integer, minimum: 0 }
+        orphanFiles: { type: integer, minimum: 0 }
+        orphanBytes: { type: integer, format: int64, minimum: 0 }
+        collectedAt: { type: string, format: date-time }
+    DataFileFormat:
+      type: string
+      enum: [CSV, TSV, XLSX, JSON, HDF5, MAT, VIDEO, IMAGE, PDF, BINARY, UNKNOWN]
+    DataFileStatus:
+      type: string
+      enum: [REGISTERED, AVAILABLE, PROCESSING, FAILED, DELETED]
+    DataFileKind:
+      type: string
+      enum: [RAW_DATA, DERIVED_DATA, ANALYSIS_RESULT, REPORT, AUXILIARY]
+    DataFileOrigin:
+      type: string
+      enum: [UPLOAD, CONVERSION, ANALYSIS, REPORT_GENERATION, EXTERNAL_IMPORT]
+    DataFileResponse:
+      type: object
+      required:
+        - id
+        - projectId
+        - createdByUserId
+        - kind
+        - format
+        - status
+        - originalFileName
+        - origin
+        - parentDataFileIds
+        - metadata
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: integer, minimum: 1 }
+        projectId: { type: integer, minimum: 1 }
+        createdByUserId: { type: integer, minimum: 1 }
+        kind: { $ref: '#/components/schemas/DataFileKind' }
+        format: { $ref: '#/components/schemas/DataFileFormat' }
+        status: { $ref: '#/components/schemas/DataFileStatus' }
+        originalFileName: { type: string }
+        mediaType: { type: string, nullable: true }
+        sizeBytes: { type: integer, format: int64, minimum: 0, nullable: true }
+        sha256: { type: string, pattern: '^[0-9a-fA-F]{64}$', nullable: true }
+        storageProvider: { type: string, nullable: true }
+        origin: { $ref: '#/components/schemas/DataFileOrigin' }
+        parentDataFileIds:
+          type: array
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+        producingTaskId: { type: integer, minimum: 1, nullable: true }
+        externalSystem: { type: string, nullable: true }
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DataFileConversionOptionResponse:
+      type: object
+      required: [name, type, required]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [STRING, INTEGER] }
+        required: { type: boolean }
+        defaultValue: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+    DataFileConversionCapabilityResponse:
+      type: object
+      required: [sourceFormat, targetFormat, options]
+      properties:
+        sourceFormat: { $ref: '#/components/schemas/DataFileFormat' }
+        targetFormat: { $ref: '#/components/schemas/DataFileFormat' }
+        options:
+          type: array
+          items: { $ref: '#/components/schemas/DataFileConversionOptionResponse' }
+    TaskRetryPolicyRequest:
+      type: object
+      properties:
+        maxAttempts: { type: integer, minimum: 1, default: 1 }
+        initialDelayMs: { type: integer, format: int64, minimum: 0, default: 1000 }
+        backoffMultiplier: { type: number, format: double, minimum: 1, default: 2.0 }
+        maxDelayMs: { type: integer, format: int64, minimum: 0, default: 60000 }
+    SubmitDataFileConversionRequest:
+      type: object
+      required: [targetFormat]
+      properties:
+        targetFormat: { $ref: '#/components/schemas/DataFileFormat' }
+        options:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+        priority: { type: integer, minimum: 0, maximum: 100, default: 50 }
+        retry: { $ref: '#/components/schemas/TaskRetryPolicyRequest' }
+        timeoutMs: { type: integer, format: int64, minimum: 1, nullable: true }
+    ReportDefinitionResponse:
+      type: object
+      required: [id, version, title, generatorId, outputFormat, outputFileName, defaultParameters]
+      properties:
+        id: { type: string }
+        version: { type: integer, minimum: 1 }
+        title: { type: string }
+        generatorId: { type: string }
+        outputFormat: { $ref: '#/components/schemas/DataFileFormat' }
+        outputFileName: { type: string }
+        defaultParameters:
+          type: object
+          additionalProperties: { type: string }
+    SubmitReportTaskRequest:
+      type: object
+      required: [definitionId]
+      properties:
+        definitionId: { type: string, minLength: 1 }
+        sourceDataFileIds:
+          type: array
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+          default: []
+        parameters:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+        priority: { type: integer, minimum: 0, maximum: 100, default: 50 }
+        retry: { $ref: '#/components/schemas/TaskRetryPolicyRequest' }
+        timeoutMs: { type: integer, format: int64, minimum: 1, nullable: true }
+    TaskStatus:
+      type: string
+      enum: [PENDING, QUEUED, RUNNING, RETRYING, COMPLETED, FAILED, TIMED_OUT, CANCELLED]
+    TaskProgressResponse:
+      type: object
+      required: [percent, updatedAt]
+      properties:
+        percent: { type: integer, minimum: 0, maximum: 100 }
+        message: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    TaskResultResponse:
+      type: object
+      required: [metadata]
+      properties:
+        outputPath: { type: string, nullable: true }
+        contentType: { type: string, nullable: true }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+    TaskErrorResponse:
+      type: object
+      required: [code, category, message, retryable, details, occurredAt]
+      properties:
+        code: { type: string }
+        category:
+          type: string
+          enum: [VALIDATION, CONFIGURATION, AUTHORIZATION, NOT_FOUND, TRANSIENT, TIMEOUT, EXECUTION, INTERNAL]
+        message: { type: string }
+        retryable: { type: boolean }
+        details:
+          type: object
+          additionalProperties: { type: string }
+        occurredAt: { type: string, format: date-time }
+    TaskResponse:
+      type: object
+      required: [id, projectId, taskType, status, priority, attemptCount, maxAttempts, createdAt, updatedAt]
+      properties:
+        id: { type: integer, minimum: 1 }
+        projectId: { type: integer, minimum: 1 }
+        taskType: { type: string, enum: [data-file-conversion, report-generation, analysis] }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+        priority: { type: integer, minimum: 0, maximum: 100 }
+        attemptCount: { type: integer, minimum: 0 }
+        maxAttempts: { type: integer, minimum: 1 }
+        nextAttemptAt: { type: string, format: date-time, nullable: true }
+        timeoutMs: { type: integer, format: int64, nullable: true }
+        cancellationRequestedAt: { type: string, format: date-time, nullable: true }
+        cancellationRequestedBy: { type: integer, nullable: true }
+        progress: { allOf: [{ $ref: '#/components/schemas/TaskProgressResponse' }], nullable: true }
+        result: { allOf: [{ $ref: '#/components/schemas/TaskResultResponse' }], nullable: true }
+        error: { allOf: [{ $ref: '#/components/schemas/TaskErrorResponse' }], nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        timestamp: { type: integer, format: int64 }

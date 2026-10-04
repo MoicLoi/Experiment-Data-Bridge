@@ -1,0 +1,142 @@
+package me.moiclathy.edb.core.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.config.preview.ConfigurationPreview
+import me.moiclathy.edb.core.database.model.Project
+import me.moiclathy.edb.core.database.repository.ProjectRepository
+import me.moiclathy.edb.core.exception.PermissionDeniedException
+import me.moiclathy.edb.core.exception.ProjectNotFoundException
+import me.moiclathy.edb.core.security.PasswordHasher.verify
+import me.moiclathy.edb.core.security.PermissionChecker
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+
+class ProjectConfigurationPreviewServiceTest3 {
+
+    private val repository = mockk<ProjectRepository>()
+    private val permissionChecker = mockk<PermissionChecker>()
+    private val auditService = mockk<AuditService>(relaxed = true)
+
+    private val exportService = ProjectConfigurationExportService(
+        repository = repository,
+        permissionChecker = permissionChecker,
+        auditService = auditService
+    )
+
+    @Test
+    fun `previewShouldReturnYaml`() {
+        // Arrange
+        val projectId = 1
+        val userId = 1
+        val expectedYaml = "version: 2..."
+        val mockProject = mockk<Project> {
+            every { configYaml } returns expectedYaml
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns true
+
+        // Act
+        val result = exportService.preview(projectId, userId)
+
+        // Assert
+        assertEquals(expectedYaml, result.yaml)
+    }
+
+    @Test
+    fun `preview should throw PermissionDeniedException when user lacks read permission`() {
+        // Arrange
+        val projectId = 1
+        val userId = 2
+        val mockProject = mockk<Project>()
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns false
+
+        // Act & Assert
+        assertThrows<PermissionDeniedException> {
+            exportService.preview(projectId, userId)
+        }
+    }
+
+    @Test
+    fun `preview should throw ProjectNotFoundException when project does not exist`() {
+        // Arrange
+        val nonExistentId = 999
+        val userId = 1
+
+        every { repository.findById(nonExistentId) } returns null
+
+        // Act & Assert
+        assertThrows<ProjectNotFoundException> {
+            exportService.preview(nonExistentId, userId)
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    @Test
+    fun previewCurrentConfigurationShouldUseDatabaseAndSkipGit() {
+        val projectId = 1
+        val userId = 100
+        val expectedYaml = "version: 1\nproject:\n  name: current"
+        val project = Project(id = projectId, name = "test", configYaml = expectedYaml)
+
+        every { repository.findById(projectId) } returns project
+        every { permissionChecker.requireReadable(userId, project) } returns true
+
+        // 执行当前配置预览（不传 commitId）
+        val preview = configurationService.preview(projectId, userId, null)
+
+        assertEquals(expectedYaml, preview.yaml)
+
+        // 验证：当前配置走数据库，绝对不应该调用 gitPreviewService
+        verify(exactly = 0) {
+            gitPreviewService.preview(any(), any())
+        }
+    }
+
+    @Test
+    fun previewHistoricalConfigurationShouldDelegateToGitPreviewService() {
+        val projectId = 1
+        val userId = 100
+        val commitId = "abc1234"
+        val expectedYaml = "version: 1\nproject:\n  name: historical"
+        val project = Project(id = projectId, name = "test", configYaml = "current")
+
+        every { repository.findById(projectId) } returns project
+        every { permissionChecker.requireReadable(userId, project) } returns true
+        every { gitPreviewService.preview(projectId, commitId) } returns ConfigurationPreview(yaml = expectedYaml)
+
+        // 执行历史配置预览（传入 commitId）
+        val preview = configurationService.preview(projectId, userId, commitId)
+
+        assertEquals(expectedYaml, preview.yaml)
+
+        // 验证：历史配置必须正确委托给 gitPreviewService
+        verify(exactly = 1) {
+            gitPreviewService.preview(projectId, commitId)
+        }
+    }
+}
+
+
+

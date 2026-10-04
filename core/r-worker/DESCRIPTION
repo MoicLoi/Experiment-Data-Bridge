@@ -1,0 +1,11 @@
+Package: edbrworker
+Type: Package
+Title: Experiment Data Bridge R Analysis Worker
+Version: 0.1.0
+Authors@R: person("EDB", "Project", role = c("aut", "cre"), email = "noreply@example.invalid")
+Description: Reference Plumber worker implementing the EDB external analysis protocol.
+License: MIT
+Encoding: UTF-8
+Imports:
+    jsonlite,
+    plumber

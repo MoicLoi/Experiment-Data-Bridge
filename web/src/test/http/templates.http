@@ -1,0 +1,45 @@
+@baseUrl = http://localhost:25560
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODYxMzM3NjQsImV4cCI6MTc4NjIyMDE2NH0.kWJNXXFSuhWm6JPnnx5g2G8BtslL94KOZCI6NG7PqCY
+
+
+### 创建 Template
+POST {{baseUrl}}/api/v1/templates
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "2-template",
+  "description": "test",
+  "type": "EXPERIMENT",
+  "visibility": "PRIVATE",
+  "yaml": "version:1"
+}
+
+### 获取 Template
+GET {{baseUrl}}/api/v1/templates/1
+Authorization: Bearer {{token}}
+
+### 更新 Template
+PUT {{baseUrl}}/api/v1/templates/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Updated Name",
+  "description": "Test Desc",
+  "type": "EXPERIMENT",
+  "visibility": "PUBLIC",
+  "yaml": "version: 1.0"
+}
+
+### 删除 Template
+DELETE {{baseUrl}}/api/v1/templates/1
+Authorization: Bearer {{token}}
+
+### 搜索 Template
+GET {{baseUrl}}/api/v1/templates?keyword=Test
+Authorization: Bearer {{token}}
+
+### Template 数量
+GET {{baseUrl}}/api/v1/templates/count
+Authorization: Bearer {{token}}

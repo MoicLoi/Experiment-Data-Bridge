@@ -1,0 +1,16 @@
+export interface SchedulerState{status:string;desiredWorkerCount:number;activeWorkerCount:number;startedAt?:string|null;stoppedAt?:string|null;lastFailure?:string|null}
+export interface DockerWorker{id:string;status:string;containerName:string;endpoint:string;containerId?:string|null;healthy:boolean;detail?:string|null;observedAt:string}
+export interface WorkerFleet{healthy:boolean;observedAt:string;members:DockerWorker[]}
+export interface WorkerLogs{workerId:string;containerId:string;content:string;collectedAt:string}
+export interface DockerImageCatalogItem{workerId:string;image:string;registry:string;repository:string;tag:string}
+export interface DockerRegistryProfile{id:string;displayName:string;registryUrl:string;namespace?:string|null;credentialRef?:string|null;credentialConfigured:boolean;allowInsecure:boolean;isDefault:boolean;createdAt:string;updatedAt:string}
+export interface DockerRebuildPreview{workerId:string;currentImage:string;targetImage:string;registryProfileId:string;credentialConfigured:boolean;localImage:boolean;confirmationToken:string}
+export interface DockerRebuildResult{workerId:string;previousImage?:string|null;targetImage:string;stage:string;rolledBack:boolean;containerId?:string|null;completedAt:string;failure?:string|null}
+export interface DockerRebuildProgress{workerId:string;stage:string;targetImage:string;startedAt:string;updatedAt:string;result?:DockerRebuildResult|null}
+export interface TaskMetrics{queueDepth:number;queuedCount:number;retryingCount:number;runningCount:number;succeededCount:number;failedCount:number;timedOutCount:number;averageExecutionDurationMs?:number|null;collectedAt:string}
+export interface AgentMetrics{totalRuns:number;received:number;planning:number;validating:number;awaitingApproval:number;executing:number;waitingTask:number;completed:number;failed:number;cancelled:number;inputTokens:number;outputTokens:number;averageExecutionMillis?:number|null;collectedAt:string}
+export interface ProviderStatus{id:string;providerId:string;modelName:string;builtIn:boolean;initialized:boolean;apiKeyConfigured:boolean;customEndpointConfigured:boolean;health:string;consecutiveFailures:number;circuitOpenUntil?:string|null}
+export interface ModelMetrics{profileId:string;requests:number;successes:number;failures:number;fallbackUses:number;inputTokens:number;outputTokens:number;inFlight:number;averageLatencyMillis?:number|null;lastCalledAt?:string|null}
+export interface RetentionPolicy{enabled:boolean;retentionDays?:number;minimumAgeHours?:number;cleanupIntervalMinutes:number;batchSize?:number;maxBatchesPerRun?:number;maxDeletesPerRun?:number}
+export interface RetentionOverview{policy:RetentionPolicy;state?:{running:boolean;lastStartedAt?:string|null;lastResult?:Record<string,unknown>|null;lastFailure?:string|null};running?:boolean;lastStartedAt?:string|null;lastResult?:Record<string,unknown>|null;lastFailure?:string|null}
+export interface RetentionEstimate{cutoff:string;collectedAt:string;expiredTasks?:number;expiredDeletedFiles?:number;expiredRuns?:number;orphanFiles?:number;orphanBytes?:number;scannedFiles?:number}

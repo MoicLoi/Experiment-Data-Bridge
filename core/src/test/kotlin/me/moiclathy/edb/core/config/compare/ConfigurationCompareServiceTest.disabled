@@ -1,0 +1,450 @@
+package me.moiclathy.edb.core.config.compare
+
+import me.moiclathy.edb.core.config.compare.model.ConfigurationCompareChangeType
+import me.moiclathy.edb.core.config.compare.service.ConfigurationCompareService
+import me.moiclathy.edb.core.config.snapshot.model.ConfigurationSnapshot
+import me.moiclathy.edb.core.config.snapshot.model.SnapshotMetadata
+import me.moiclathy.edb.core.config.snapshot.repository.ConfigurationSnapshotRepository
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import java.time.Instant
+
+class ConfigurationCompareServiceTest {
+
+    private class InMemorySnapshotRepository :
+        ConfigurationSnapshotRepository {
+
+        private val snapshots =
+            mutableMapOf<Long, ConfigurationSnapshot>()
+
+        override fun save(
+            snapshot: ConfigurationSnapshot
+        ): ConfigurationSnapshot {
+
+            val id =
+                snapshot.id ?: (snapshots.size + 1L)
+
+            val saved =
+                snapshot.copy(id = id)
+
+            snapshots[id] = saved
+
+            return saved
+        }
+
+        override fun findById(
+            id: Long
+        ): ConfigurationSnapshot? =
+            snapshots[id]
+
+        override fun findLatest(
+            projectId: Int
+        ): ConfigurationSnapshot? =
+            snapshots.values
+                .filter { it.projectId == projectId }
+                .maxByOrNull { it.version }
+
+        override fun findByProject(
+            projectId: Int
+        ): List<ConfigurationSnapshot> =
+            snapshots.values
+                .filter { it.projectId == projectId }
+                .sortedBy { it.version }
+
+        override fun delete(
+            id: Long
+        ) {
+            snapshots.remove(id)
+        }
+
+        override fun count(
+            projectId: Int
+        ): Long =
+            snapshots.values
+                .count { it.projectId == projectId }
+                .toLong()
+    }
+
+    private val repository =
+        InMemorySnapshotRepository()
+
+    private val service =
+        ConfigurationCompareService(repository)
+
+    private fun snapshot(
+        id: Long,
+        projectId: Int = 1,
+        version: Int = 1,
+        yaml: String
+    ): ConfigurationSnapshot {
+
+        return ConfigurationSnapshot(
+            id = id,
+            projectId = projectId,
+            version = version,
+            metadata = SnapshotMetadata(
+                createdAt = Instant.now(),
+                createdBy = "test"
+            ),
+            yaml = yaml
+        )
+    }
+
+    @Test
+    fun `identical snapshots should have no changes`() {
+
+        repository.save(
+            snapshot(
+                id = 1,
+                yaml = """
+                    server:
+                      port: 8080
+                      host: localhost
+                """.trimIndent()
+            )
+        )
+
+        repository.save(
+            snapshot(
+                id = 2,
+                version = 2,
+                yaml = """
+                    server:
+                      port: 8080
+                      host: localhost
+                """.trimIndent()
+            )
+        )
+
+        val result =
+            service.compare(1, 2)
+
+        assertTrue(result.isIdentical)
+        assertTrue(result.changes.isEmpty())
+    }
+
+    @Test
+    fun `changed value should be detected`() {
+
+        repository.save(
+            snapshot(
+                id = 1,
+                yaml = """
+                    server:
+                      port: 8080
+                """.trimIndent()
+            )
+        )
+
+        repository.save(
+            snapshot(
+                id = 2,
+                version = 2,
+                yaml = """
+                    server:
+                      port: 9090
+                """.trimIndent()
+            )
+        )
+
+        val result =
+            service.compare(1, 2)
+
+        assertFalse(result.isIdentical)
+
+        assertEquals(
+            1,
+            result.changed.size
+        )
+
+        assertEquals(
+            "server.port",
+            result.changed.first().path
+        )
+
+        assertEquals(
+            8080,
+            result.changed.first().sourceValue
+        )
+
+        assertEquals(
+            9090,
+            result.changed.first().targetValue
+        )
+    }
+
+    @Test
+    fun `added value should be detected`() {
+
+        repository.save(
+            snapshot(
+                id = 1,
+                yaml = """
+                    server:
+                      port: 8080
+                """.trimIndent()
+            )
+        )
+
+        repository.save(
+            snapshot(
+                id = 2,
+                version = 2,
+                yaml = """
+                    server:
+                      port: 8080
+                      host: localhost
+                """.trimIndent()
+            )
+        )
+
+        val result =
+            service.compare(1, 2)
+
+        assertEquals(
+            1,
+            result.added.size
+        )
+
+        assertEquals(
+            "server.host",
+            result.added.first().path
+        )
+
+        assertEquals(
+            null,
+            result.added.first().sourceValue
+        )
+
+        assertEquals(
+            "localhost",
+            result.added.first().targetValue
+        )
+    }
+
+    @Test
+    fun `removed value should be detected`() {
+
+        repository.save(
+            snapshot(
+                id = 1,
+                yaml = """
+                    server:
+                      port: 8080
+                      host: localhost
+                """.trimIndent()
+            )
+        )
+
+        repository.save(
+            snapshot(
+                id = 2,
+                version = 2,
+                yaml = """
+                    server:
+                      port: 8080
+                """.trimIndent()
+            )
+        )
+
+        val result =
+            service.compare(1, 2)
+
+        assertEquals(
+            1,
+            result.removed.size
+        )
+
+        assertEquals(
+            "server.host",
+            result.removed.first().path
+        )
+    }
+
+    @Test
+    fun `nested configuration should be compared recursively`() {
+
+        repository.save(
+            snapshot(
+                id = 1,
+                yaml = """
+                    security:
+                      jwt:
+                        issuer: edb
+                        expiresIn: 3600
+                """.trimIndent()
+            )
+        )
+
+        repository.save(
+            snapshot(
+                id = 2,
+                version = 2,
+                yaml = """
+                    security:
+                      jwt:
+                        issuer: edb
+                        expiresIn: 7200
+                """.trimIndent()
+            )
+        )
+
+        val result =
+            service.compare(1, 2)
+
+        assertEquals(
+            1,
+            result.changed.size
+        )
+
+        assertEquals(
+            "security.jwt.expiresIn",
+            result.changed.first().path
+        )
+    }
+
+    @Test
+    fun `list changes should be detected as one value change`() {
+
+        repository.save(
+            snapshot(
+                id = 1,
+                yaml = """
+                    servers:
+                      - api
+                      - web
+                """.trimIndent()
+            )
+        )
+
+        repository.save(
+            snapshot(
+                id = 2,
+                version = 2,
+                yaml = """
+                    servers:
+                      - api
+                      - worker
+                """.trimIndent()
+            )
+        )
+
+        val result =
+            service.compare(1, 2)
+
+        assertEquals(
+            1,
+            result.changed.size
+        )
+
+        assertEquals(
+            "servers",
+            result.changed.first().path
+        )
+
+        assertEquals(
+            ConfigurationCompareChangeType.CHANGED,
+            result.changed.first().type
+        )
+    }
+
+    @Test
+    fun `different project snapshots should be rejected`() {
+
+        repository.save(
+            snapshot(
+                id = 1,
+                projectId = 1,
+                yaml = """
+                    server:
+                      port: 8080
+                """.trimIndent()
+            )
+        )
+
+        repository.save(
+            snapshot(
+                id = 2,
+                projectId = 2,
+                yaml = """
+                    server:
+                      port: 8080
+                """.trimIndent()
+            )
+        )
+
+        val exception =
+            org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+                service.compare(1, 2)
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("same project")
+        )
+    }
+
+    @Test
+    fun `missing snapshot should be rejected`() {
+
+        repository.save(
+            snapshot(
+                id = 1,
+                yaml = """
+                    server:
+                      port: 8080
+                """.trimIndent()
+            )
+        )
+
+        val exception =
+            org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+                service.compare(1, 999)
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("snapshot not found")
+        )
+    }
+
+    @Test
+    fun `same snapshot should be rejected`() {
+
+        repository.save(
+            snapshot(
+                id = 1,
+                yaml = """
+                    server:
+                      port: 8080
+                """.trimIndent()
+            )
+        )
+
+        val exception =
+            org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+                service.compare(1, 1)
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("different")
+        )
+    }
+
+    @Test
+    fun `invalid snapshot id should be rejected`() {
+
+        val exception =
+            org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+                service.compare(0, 1)
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("greater than zero")
+        )
+    }
+}

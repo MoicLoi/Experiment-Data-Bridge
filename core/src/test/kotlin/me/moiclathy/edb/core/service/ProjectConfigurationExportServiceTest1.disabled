@@ -1,0 +1,137 @@
+package me.moiclathy.edb.core.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+
+import me.moiclathy.edb.core.database.model.Project
+import me.moiclathy.edb.core.database.repository.ProjectRepository
+import me.moiclathy.edb.core.exception.PermissionDeniedException
+import me.moiclathy.edb.core.exception.ProjectNotFoundException
+import me.moiclathy.edb.core.security.PermissionChecker
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+
+class ProjectConfigurationExportServiceTest1 {
+
+    private val repository: ProjectRepository = mockk()
+    private val permissionChecker: PermissionChecker = mockk()
+    private val auditService: AuditService = mockk(relaxed = true) // 使用 relaxed = true 方便忽略不需要严格断言的审计调用，或者手动 every
+    private val service = ProjectConfigurationExportService(repository, permissionChecker, auditService)
+
+    @Test
+    fun `should export configuration successfully when authorized`() {
+        // Given
+        val projectId = 1
+        val userId = 100
+        val rawYaml = """
+            version: 1
+            project:
+              name: test
+        """.trimIndent()
+
+        val mockProject = mockk<Project> {
+            every { id } returns projectId
+            every { configYaml } returns rawYaml
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns true
+
+        // When
+        val result = service.export(projectId, userId)
+
+        // Then
+        assertEquals(rawYaml, result)
+    }
+
+    @Test
+    fun `should throw ProjectNotFoundException when project does not exist`() {
+        // Given
+        val projectId = 999
+        val userId = 100
+
+        every { repository.findById(projectId) } returns null
+
+        // When & Then
+        assertThrows<ProjectNotFoundException> {
+            service.export(projectId, userId)
+        }
+    }
+
+    @Test
+    fun `should throw PermissionDeniedException when user lacks read permission`() {
+        // Given
+        val projectId = 1
+        val userId = 100
+        val mockProject = mockk<Project> {
+            every { id } returns projectId
+            every { configYaml } returns "version: 1"
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns false
+
+        // When & Then
+        assertThrows<PermissionDeniedException> {
+            service.export(projectId, userId)
+        }
+    }
+
+    @Test
+    fun `should return exact raw yaml without reformatting or re-sorting`() {
+        // Given
+        val projectId = 1
+        val userId = 100
+        val originalRawYaml = """
+            version: 1
+            project:
+              name: test
+            workflow:
+              steps:
+                - name: step1
+            output:
+              format: json
+              path: build/output
+        """.trimIndent()
+
+        val mockProject = mockk<Project> {
+            every { id } returns projectId
+            every { configYaml } returns originalRawYaml
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns true
+
+        // When
+        val result = service.export(projectId, userId)
+
+        // Then
+        assertEquals(originalRawYaml, result)
+    }
+
+    @Test
+    fun `export should record audit`() {
+        // Given
+        val projectId = 1
+        val userId = 100
+        val rawYaml = "version: 1"
+
+        val mockProject = mockk<Project> {
+            every { id } returns projectId
+            every { configYaml } returns rawYaml
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns true
+
+        // When
+        service.export(projectId, userId)
+
+        // Then: 验证是否成功触发了审计记录
+        verify(exactly = 1) {
+            auditService.recordConfigurationExport(projectId, userId)
+        }
+    }
+}

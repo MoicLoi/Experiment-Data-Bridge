@@ -1,0 +1,64 @@
+package me.moiclathy.edb.core.git
+
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
+
+class GitDiffServiceTest {
+
+    @TempDir
+    lateinit var tempDir: Path
+
+    private lateinit var repositoryService: GitRepositoryService
+    private lateinit var commitService: GitCommitService
+    private lateinit var fileLoader: GitFileLoader
+    private lateinit var diffService: GitDiffService
+
+    @BeforeEach
+    fun setUp() {
+        // 使用注入了 @TempDir 的自定义根目录，实现百分之百的沙箱隔离
+        repositoryService = GitRepositoryService(customRootDirectory = tempDir)
+        commitService = GitCommitService(repositoryService)
+        fileLoader = GitFileLoader(repositoryService)
+        diffService = GitDiffService(fileLoader)
+    }
+
+    @Test
+    fun `should calculate diff between two commits successfully`() {
+        val projectId = 3000
+        val author = "TestUser"
+
+        // 1. 初始化仓库（在临时目录中进行，绝对不污染本地真实环境）
+        repositoryService.initialize(projectId)
+
+        // 2. 提交 Version 1
+        val commit1 = commitService.commit(
+            projectId = projectId,
+            yaml = "version: 1\nname: test-project",
+            message = "Initial commit version 1",
+            author = author
+        )
+
+        // 3. 提交 Version 2
+        val commit2 = commitService.commit(
+            projectId = projectId,
+            yaml = "version: 2\nname: test-project-updated",
+            message = "Update commit version 2",
+            author = author
+        )
+
+        // 4. 调用 diffService 进行差异对比
+        val diffResult = diffService.diff(projectId, commit1.commitId, commit2.commitId)
+
+        // 5. 断言结果
+        assertNotNull(diffResult)
+        assertEquals(commit1.commitId, diffResult.oldCommit)
+        assertEquals(commit2.commitId, diffResult.newCommit)
+
+        assertTrue(diffResult.oldContent.contains("version: 1"), "Old content should contain version 1")
+        assertTrue(diffResult.newContent.contains("version: 2"), "New content should contain version 2")
+        assertTrue(diffResult.newContent.contains("test-project-updated"), "New content should contain updated name")
+    }
+}

@@ -1,0 +1,218 @@
+package me.moiclathy.edb.core.config.snapshot
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.config.snapshot.model.ConfigurationSnapshot
+import me.moiclathy.edb.core.config.snapshot.repository.ConfigurationSnapshotRepository
+import me.moiclathy.edb.core.config.snapshot.service.ConfigurationSnapshotService
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Test
+
+class ConfigurationSnapshotServiceTest {
+
+    private val repository =
+        mockk<ConfigurationSnapshotRepository>()
+
+    private val service =
+        ConfigurationSnapshotService(repository)
+
+    @Test
+    fun `should create first snapshot with version one`() {
+
+        every {
+            repository.findLatest(1)
+        } returns null
+
+        every {
+            repository.save(any())
+        } answers {
+            firstArg<ConfigurationSnapshot>()
+                .copy(id = 1L)
+        }
+
+        val result =
+            service.createSnapshot(
+                projectId = 1,
+                yaml = "version: 1",
+                createdBy = "admin"
+            )
+
+        assertEquals(
+            1L,
+            result.id
+        )
+
+        assertEquals(
+            1,
+            result.version
+        )
+
+        assertEquals(
+            1,
+            result.projectId
+        )
+
+        verify(exactly = 1) {
+            repository.findLatest(1)
+        }
+
+        verify(exactly = 1) {
+            repository.save(any())
+        }
+    }
+
+    @Test
+    fun `should increment snapshot version`() {
+
+        val latest =
+            ConfigurationSnapshot(
+                id = 10L,
+                projectId = 1,
+                version = 5,
+                metadata = me.moiclathy.edb.core.config.snapshot.model.SnapshotMetadata(
+                    createdAt = java.time.Instant.now(),
+                    createdBy = "admin"
+                ),
+                yaml = "version: 1"
+            )
+
+        every {
+            repository.findLatest(1)
+        } returns latest
+
+        every {
+            repository.save(any())
+        } answers {
+            firstArg<ConfigurationSnapshot>()
+                .copy(id = 11L)
+        }
+
+        val result =
+            service.createSnapshot(
+                projectId = 1,
+                yaml = "version: 2",
+                createdBy = "admin"
+            )
+
+        assertEquals(
+            6,
+            result.version
+        )
+    }
+
+    @Test
+    fun `should get snapshot`() {
+
+        val snapshot =
+            ConfigurationSnapshot(
+                id = 1L,
+                projectId = 1,
+                version = 1,
+                metadata = me.moiclathy.edb.core.config.snapshot.model.SnapshotMetadata(
+                    createdAt = java.time.Instant.now(),
+                    createdBy = "admin"
+                ),
+                yaml = "version: 1"
+            )
+
+        every {
+            repository.findById(1L)
+        } returns snapshot
+
+        val result =
+            service.getSnapshot(1L)
+
+        assertEquals(
+            snapshot,
+            result
+        )
+
+        verify(exactly = 1) {
+            repository.findById(1L)
+        }
+    }
+
+    @Test
+    fun `should reject missing snapshot`() {
+
+        every {
+            repository.findById(999L)
+        } returns null
+
+        assertThrows(
+            IllegalArgumentException::class.java
+        ) {
+            service.getSnapshot(999L)
+        }
+    }
+
+    @Test
+    fun `should list project snapshots`() {
+
+        every {
+            repository.findByProject(1)
+        } returns emptyList()
+
+        val result =
+            service.listSnapshots(1)
+
+        assertEquals(
+            emptyList<ConfigurationSnapshot>(),
+            result
+        )
+    }
+
+    @Test
+    fun `should delete snapshot`() {
+
+        every {
+            repository.delete(1L)
+        } returns Unit
+
+        service.deleteSnapshot(1L)
+
+        verify(exactly = 1) {
+            repository.delete(1L)
+        }
+    }
+
+    @Test
+    fun `should reject invalid project id`() {
+
+        assertThrows(
+            IllegalArgumentException::class.java
+        ) {
+            service.listSnapshots(0)
+        }
+    }
+
+    @Test
+    fun `should reject blank yaml`() {
+
+        assertThrows(
+            IllegalArgumentException::class.java
+        ) {
+            service.createSnapshot(
+                projectId = 1,
+                yaml = "",
+                createdBy = "admin"
+            )
+        }
+    }
+
+    @Test
+    fun `should reject blank creator`() {
+
+        assertThrows(
+            IllegalArgumentException::class.java
+        ) {
+            service.createSnapshot(
+                projectId = 1,
+                yaml = "version: 1",
+                createdBy = ""
+            )
+        }
+    }
+}

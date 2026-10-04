@@ -1,0 +1,31 @@
+# Normalize text files to LF in the repository, so clones on any OS agree.
+* text=auto
+
+# The Gradle wrapper shell script must keep LF or it breaks on Linux/macOS.
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Windows launchers keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets: never diff or convert.
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
+*.xls binary
+*.docx binary
+*.zip binary
+*.gz binary
+
+# Generated files that add noise to diffs and language statistics.
+package-lock.json linguist-generated=true -diff
+desktop/src-tauri/Cargo.lock linguist-generated=true -diff
+web-ui/src/styles.css linguist-vendored=false
+desktop/src-tauri/gen/** linguist-generated=true

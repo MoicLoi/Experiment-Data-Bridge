@@ -1,0 +1,38 @@
+package me.moiclathy.edb.core.config.migration
+
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+
+class ConfigVersionReaderTest {
+
+    private val reader = ConfigVersionReader()
+
+    @Test
+    fun shouldReadVersion() {
+
+        val yaml = """
+            version: 3
+            project:
+              name: demo
+        """.trimIndent()
+
+        assertEquals(
+            3,
+            reader.readVersion(yaml)
+        )
+    }
+
+    @Test
+    fun shouldDefaultToVersionOne() {
+
+        val yaml = """
+            project:
+              name: demo
+        """.trimIndent()
+
+        assertEquals(
+            1,
+            reader.readVersion(yaml)
+        )
+    }
+}

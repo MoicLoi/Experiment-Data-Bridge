@@ -1,0 +1,63 @@
+package me.moiclathy.edb.core.database.me.moiclathy.edb.core.config.runtime
+
+import me.moiclathy.edb.core.config.OutputConfig
+import me.moiclathy.edb.core.config.ProjectConfig
+import me.moiclathy.edb.core.config.ProjectInfo
+import me.moiclathy.edb.core.config.WorkflowConfig
+import me.moiclathy.edb.core.config.runtime.CachedConfigurationCenter
+import me.moiclathy.edb.core.config.runtime.ConfigRefreshService
+import me.moiclathy.edb.core.config.runtime.ProjectConfigLoader
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotSame
+import org.junit.jupiter.api.Test
+
+class FakeLoader : ProjectConfigLoader {
+    var count = 0
+
+    override fun load(projectId: Int): ProjectConfig {
+        count++
+        return ProjectConfig(
+            version = count,
+            project = ProjectInfo(
+                name = "Test Project $count",
+                description = "Test Desc",
+                species = "test",
+                owner = "test-user"
+            ),
+            workflow = WorkflowConfig(
+                steps = listOf("collect", "analyse")
+            ),
+            output = OutputConfig(
+                format = "excel",
+                path = "./output"
+            )
+        )
+    }
+}
+
+class ConfigurationCenterTest {
+
+    @Test
+    fun refreshShouldReloadConfiguration() {
+        val loader = FakeLoader()
+        val configurationCenter = CachedConfigurationCenter(loader)
+        val refreshService = ConfigRefreshService(configurationCenter)
+
+        // 1. 第一次获取，触发 load，版本应为 1（缓存生效）
+        val a = configurationCenter.get(1)
+        assertEquals(1, a.version)
+
+        // 2. 再次获取，应该命中缓存，版本仍然为 1，且对象引用相同
+        val b = configurationCenter.get(1)
+        assertEquals(1, b.version)
+        assertEquals(a, b)
+
+        // 3. 执行手动刷新（或 reload），使缓存失效并重新加载
+        refreshService.refresh(1)
+
+        // 4. 刷新后再次获取，应该触发重新加载，版本更新为 2
+        val c = configurationCenter.get(1)
+        assertEquals(2, c.version)
+        assertNotSame(a, c)
+    }
+}

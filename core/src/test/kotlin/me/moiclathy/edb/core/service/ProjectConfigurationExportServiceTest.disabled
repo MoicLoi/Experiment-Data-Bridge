@@ -1,0 +1,110 @@
+package me.moiclathy.edb.core.service
+
+import io.mockk.every
+import io.mockk.mockk
+import me.moiclathy.edb.core.database.model.Project
+import me.moiclathy.edb.core.database.repository.ProjectRepository
+import me.moiclathy.edb.core.exception.PermissionDeniedException
+import me.moiclathy.edb.core.exception.ProjectNotFoundException
+import me.moiclathy.edb.core.security.PermissionChecker
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+
+class ProjectConfigurationExportServiceTest {
+
+    private val repository: ProjectRepository = mockk()
+    private val permissionChecker: PermissionChecker = mockk()
+    private val service = ProjectConfigurationExportService(repository, permissionChecker)
+
+    @Test
+    fun `should export configuration successfully when authorized`() {
+        // Given
+        val projectId = 1
+        val userId = 100
+        val rawYaml = """
+            version: 1
+            project:
+              name: test
+        """.trimIndent()
+
+        val mockProject = mockk<Project> {
+            every { id } returns projectId
+            every { configYaml } returns rawYaml
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns true
+
+        // When
+        val result = service.export(projectId, userId)
+
+        // Then
+        assertEquals(rawYaml, result)
+    }
+
+    @Test
+    fun `should throw ProjectNotFoundException when project does not exist`() {
+        // Given
+        val projectId = 999
+        val userId = 100
+
+        every { repository.findById(projectId) } returns null
+
+        // When & Then
+        assertThrows<ProjectNotFoundException> {
+            service.export(projectId, userId)
+        }
+    }
+
+    @Test
+    fun `should throw PermissionDeniedException when user lacks read permission`() {
+        // Given
+        val projectId = 1
+        val userId = 100
+        val mockProject = mockk<Project> {
+            every { id } returns projectId
+            every { configYaml } returns "version: 1"
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns false
+
+        // When & Then
+        assertThrows<PermissionDeniedException> {
+            service.export(projectId, userId)
+        }
+    }
+
+    @Test
+    fun `should return exact raw yaml without reformatting or re-sorting`() {
+        // Given: 带有特定缩进、排版和顺序的原始 YAML 字符串
+        val projectId = 1
+        val userId = 100
+        val originalRawYaml = """
+            version: 1
+            project:
+              name: test
+            workflow:
+              steps:
+                - name: step1
+            output:
+              format: json
+              path: build/output
+        """.trimIndent()
+
+        val mockProject = mockk<Project> {
+            every { id } returns projectId
+            every { configYaml } returns originalRawYaml
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns true
+
+        // When
+        val result = service.export(projectId, userId)
+
+        // Then: 验证输出与数据库中的原始内容按字面量完全一致，无任何序列化损耗或重排序
+        assertEquals(originalRawYaml, result)
+    }
+}

@@ -1,0 +1,137 @@
+/*package me.moiclathy.edb.core.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.database.repository.ProjectRepository
+import me.moiclathy.edb.core.database.model.Project
+import me.moiclathy.edb.core.git.GitCommitInfo
+import me.moiclathy.edb.core.git.GitCommitService
+import me.moiclathy.edb.core.git.GitHistoryService
+import me.moiclathy.edb.core.git.GitRepositoryService
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import kotlin.random.Random
+
+class ProjectConfigurationServiceUnitTest {
+
+    private lateinit var projectRepository: ProjectRepository
+    private lateinit var gitRepositoryService: GitRepositoryService
+    private lateinit var gitCommitService: GitCommitService
+    private lateinit var configurationService: ProjectConfigurationService
+
+    @BeforeEach
+    fun setUp() {
+        projectRepository = mockk(relaxed = true)
+        gitRepositoryService = GitRepositoryService()
+        gitCommitService = GitCommitService(gitRepositoryService)
+        val gitHistoryService = GitHistoryService(gitRepositoryService)
+
+        configurationService = ProjectConfigurationService(
+            projectRepository,
+            gitCommitService,
+            gitHistoryService
+        )
+    }
+
+    @Test
+    fun `test saveConfiguration updates database and records commits without real database`() {
+        // 使用随机 projectId，确保每次测试互不干扰，不会出现提交记录累加
+        val projectId = Random.nextInt(10000, 99999)
+        val projectName = "Mouse Study"
+        val author = "TestUser"
+
+        gitRepositoryService.initialize(projectId)
+
+        val mockProject = mockk<Project>()
+        every { mockProject.name } returns projectName
+        every { projectRepository.findById(projectId) } returns mockProject
+        every { projectRepository.updateConfiguration(projectId, any()) } returns Unit
+
+        configurationService.saveConfiguration(projectId, "version: 1.0", author)
+        configurationService.saveConfiguration(projectId, "version: 2.0", author)
+
+        gitRepositoryService.open(projectId).use { git ->
+            val commits = git.log().call().toList()
+            assertEquals(2, commits.size, "Should have exactly 2 commits")
+
+            val expectedMessage = "Update configuration of $projectName"
+            assertEquals(expectedMessage, commits[0].fullMessage)
+            assertEquals(expectedMessage, commits[1].fullMessage)
+        }
+
+        verify(exactly = 2) { projectRepository.updateConfiguration(projectId, any()) }
+    }
+}*/
+package me.moiclathy.edb.core.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.database.repository.ProjectRepository
+import me.moiclathy.edb.core.database.model.Project
+import me.moiclathy.edb.core.git.GitCommitInfo
+import me.moiclathy.edb.core.git.GitCommitService
+import me.moiclathy.edb.core.git.GitHistoryService
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import java.time.Instant
+
+class ProjectConfigurationServiceUnitTest {
+
+    private lateinit var projectRepository: ProjectRepository
+    private lateinit var gitCommitService: GitCommitService
+    private lateinit var gitHistoryService: GitHistoryService
+    private lateinit var configurationService: ProjectConfigurationService
+
+    @BeforeEach
+    fun setUp() {
+        projectRepository = mockk(relaxed = true)
+        gitCommitService = mockk(relaxed = true)
+        gitHistoryService = mockk(relaxed = true)
+
+        configurationService = ProjectConfigurationService(
+            projectRepository,
+            gitCommitService,
+            gitHistoryService
+        )
+    }
+
+    @Test
+    fun `saveConfiguration should update database and invoke git commit`() {
+        val projectId = 1001
+        val author = "TestUser"
+        val yamlContent = "version: 1.0"
+        val projectName = "Mouse Study"
+
+        val mockProject = mockk<Project>()
+        every { mockProject.name } returns projectName
+        every { projectRepository.findById(projectId) } returns mockProject
+        every { projectRepository.updateConfiguration(projectId, yamlContent) } returns Unit
+
+        // 模拟 GitCommitService 的返回值
+        every {
+            gitCommitService.commit(projectId, yamlContent, "Update configuration of $projectName", author)
+        } returns GitCommitInfo(
+            commitId = "mock-commit-id",
+            shortCommitId = "mock-id",
+            message = "Update configuration of $projectName",
+            author = author,
+            email = "test@example.com",
+            time = Instant.now()
+        )
+
+        // 执行保存
+        configurationService.saveConfiguration(projectId, yamlContent, author)
+
+        // 验证数据库更新被调用
+        verify(exactly = 1) { projectRepository.updateConfiguration(projectId, yamlContent) }
+
+        // 验证 Git 提交服务被正确调用
+        verify(exactly = 1) {
+            gitCommitService.commit(projectId, yamlContent, "Update configuration of $projectName", author)
+        }
+    }
+}

@@ -1,0 +1,4 @@
+ALTER TABLE audit_logs
+    MODIFY COLUMN resource_id INT NULL,
+    MODIFY COLUMN details TEXT NULL,
+    MODIFY COLUMN user_agent VARCHAR(512) NULL;

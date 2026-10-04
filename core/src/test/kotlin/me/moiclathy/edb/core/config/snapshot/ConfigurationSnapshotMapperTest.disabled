@@ -1,0 +1,52 @@
+package me.moiclathy.edb.core.config.snapshot
+
+import me.moiclathy.edb.core.config.snapshot.model.ConfigurationSnapshot
+import me.moiclathy.edb.core.config.snapshot.model.SnapshotMetadata
+import me.moiclathy.edb.core.config.snapshot.persistence.ConfigurationSnapshotMapper
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import java.time.Instant
+
+class ConfigurationSnapshotMapperTest {
+
+    @Test
+    fun `should map snapshot to entity and back`() {
+
+        val createdAt =
+            Instant.parse(
+                "2026-08-08T10:00:00Z"
+            )
+
+        val snapshot =
+            ConfigurationSnapshot(
+                id = 1L,
+                projectId = 10,
+                version = 3,
+                metadata = SnapshotMetadata(
+                    createdAt = createdAt,
+                    createdBy = "admin",
+                    description = "Test snapshot"
+                ),
+                yaml = """
+                    version: 1
+                    database:
+                      host: localhost
+                """.trimIndent()
+            )
+
+        val entity =
+            ConfigurationSnapshotMapper.toEntity(
+                snapshot
+            )
+
+        val restored =
+            ConfigurationSnapshotMapper.toModel(
+                entity
+            )
+
+        assertEquals(
+            snapshot,
+            restored
+        )
+    }
+}

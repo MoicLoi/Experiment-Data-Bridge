@@ -1,0 +1,180 @@
+package me.moiclathy.edb.web.routes
+
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.application.*
+import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.routing.*
+import io.ktor.server.testing.*
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.serialization.json.Json
+import me.moiclathy.edb.core.template.model.*
+import me.moiclathy.edb.core.template.service.TemplateService
+import me.moiclathy.edb.web.routes.template.templateRoutes
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.koin.dsl.module
+import org.koin.ktor.plugin.Koin
+import java.time.Instant
+import io.ktor.serialization.kotlinx.json.json
+
+class TemplateRouteTest {
+
+    private val templateServiceMock = mockk<TemplateService>()
+
+    private fun Application.configureTestModule() {
+        install(ContentNegotiation) {
+            json(Json {
+                ignoreUnknownKeys = true
+                isLenient = true
+            })
+        }
+
+        install(io.ktor.server.auth.Authentication) {
+            provider("auth-jwt") {
+                authenticate { context ->
+                    // 直接无条件塞入一个 admin 的 JWTPrincipal
+                    val dummyPayload = com.auth0.jwt.JWT.decode(
+                        com.auth0.jwt.JWT.create().withSubject("admin").sign(com.auth0.jwt.algorithms.Algorithm.HMAC256("test"))
+                    )
+                    context.principal(io.ktor.server.auth.jwt.JWTPrincipal(dummyPayload))
+                }
+            }
+        }
+        install(Koin) {
+            modules(
+                module {
+                    single { templateServiceMock }
+                }
+            )
+        }
+        routing {
+            templateRoutes()
+        }
+    }
+
+    private fun createSampleTemplate(id: Long = 1L): Template {
+        return Template(
+            id = id,
+            name = "Test Template",
+            description = "Test Desc",
+            type = TemplateType.values().first(),
+            visibility = TemplateVisibility.values().first(),
+            metadata = TemplateMetadata(
+                createdAt = Instant.now(),
+                updatedAt = Instant.now(),
+                author = "test-user",
+                version = 1
+            ),
+            yaml = "version: 1.0"
+        )
+    }
+
+    @Test
+    fun `should create template`() = testApplication {
+        application { configureTestModule() }
+
+        val mockTemplate = createSampleTemplate(id = 1L)
+        every { templateServiceMock.create(any()) } returns mockTemplate
+
+        val typeStr = TemplateType.values().first().name
+        val visibilityStr = TemplateVisibility.values().first().name
+
+        // 直接使用内置的 client 发送请求
+        val response = client.post("/api/v1/templates") {
+            contentType(ContentType.Application.Json)
+            bearerAuth("mock-jwt-token-for-testing")
+            setBody("""{
+                "name": "Test Template",
+                "description": "Test Desc",
+                "type": "$typeStr",
+                "visibility": "$visibilityStr",
+                "yaml": "version: 1.0"
+            }""")
+        }
+
+        assertEquals(HttpStatusCode.Created, response.status)
+        verify(exactly = 1) { templateServiceMock.create(any()) }
+    }
+
+    @Test
+    fun `should get template by id`() = testApplication {
+        application { configureTestModule() }
+
+        val mockTemplate = createSampleTemplate(id = 1L)
+        every { templateServiceMock.load(1L) } returns mockTemplate
+
+        val response = client.get("/api/v1/templates/1")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        verify(exactly = 1) { templateServiceMock.load(1L) }
+    }
+
+    @Test
+    fun `should update template by id`() = testApplication {
+        application { configureTestModule() }
+
+        val oldTemplate = createSampleTemplate(id = 1L)
+        val updatedTemplate = oldTemplate.copy(name = "Updated Name")
+
+        every { templateServiceMock.load(1L) } returns oldTemplate
+        every { templateServiceMock.update(any()) } returns updatedTemplate
+
+        val response = client.put("/api/v1/templates/1") {
+            contentType(ContentType.Application.Json)
+            setBody("""{
+                "name": "Updated Name",
+                "description": "Test Desc",
+                "type": "${TemplateType.values().first()}",
+                "visibility": "${TemplateVisibility.values().first()}",
+                "yaml": "version: 1.0"
+            }""")
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        verify(exactly = 1) { templateServiceMock.load(1L) }
+        verify(exactly = 1) { templateServiceMock.update(any()) }
+    }
+
+    @Test
+    fun `should delete template by id`() = testApplication {
+        application { configureTestModule() }
+
+        every { templateServiceMock.delete(1L) } returns Unit
+
+        val response = client.delete("/api/v1/templates/1")
+
+        assertEquals(HttpStatusCode.NoContent, response.status)
+        verify(exactly = 1) { templateServiceMock.delete(1L) }
+    }
+
+    @Test
+    fun `should search templates`() = testApplication {
+        application { configureTestModule() }
+
+        every { templateServiceMock.search(any()) } returns emptyList()
+
+        val response = client.get("/api/v1/templates?keyword=Test")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        verify(exactly = 1) { templateServiceMock.search(any()) }
+    }
+
+    @Test
+    fun `should get template count`() = testApplication {
+        application { configureTestModule() }
+
+        every { templateServiceMock.count() } returns 5L
+
+        val response = client.get("/api/v1/templates/count")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("""{"count":5}""", response.bodyAsText())
+        verify(exactly = 1) { templateServiceMock.count() }
+    }
+}

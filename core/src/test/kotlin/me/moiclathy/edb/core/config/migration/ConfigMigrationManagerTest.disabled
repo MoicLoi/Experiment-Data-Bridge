@@ -1,0 +1,88 @@
+package me.moiclathy.edb.core.config.migration
+
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+
+class ConfigMigrationManagerTest {
+
+    // 模拟 V1 -> V2 的迁移实现
+    private class MockV1ToV2Migration : ConfigMigration {
+        override val fromVersion = 1
+        override val toVersion = 2
+        var executeCount = 0
+
+        override fun migrate(configMap: MutableMap<String, Any?>) {
+            executeCount++
+            configMap["version"] = 2
+            // 可以模拟增加一些 v2 的字段
+            val project = configMap["project"] as? MutableMap<String, Any?> ?: mutableMapOf()
+            project["species"] = "mouse"
+            configMap["project"] = project
+        }
+    }
+
+    // 模拟假设以后增加的 V2 -> V3 的迁移实现
+    private class MockV2ToV3Migration : ConfigMigration {
+        override val fromVersion = 2
+        override val toVersion = 3
+        var executeCount = 0
+
+        override fun migrate(configMap: MutableMap<String, Any?>) {
+            executeCount++
+            configMap["version"] = 3
+        }
+    }
+
+    @Test
+    fun `Test1 - migration v1 to v2`() {
+        val migration = MockV1ToV2Migration()
+        val manager = ConfigMigrationManager(listOf(migration))
+
+        val yamlInput = "version: 1\nproject:\n  name: test"
+        val resultYaml = manager.migrate(yamlInput, 1)
+
+        assertTrue(resultYaml.contains("version: 2"))
+        assertEquals(1, migration.executeCount)
+    }
+
+    @Test
+    fun `Test2 - chain migration v1 to v3 should execute twice`() {
+        val v1ToV2 = MockV1ToV2Migration()
+        val v2ToV3 = MockV2ToV3Migration()
+        val manager = ConfigMigrationManager(listOf(v1ToV2, v2ToV3))
+
+        val yamlInput = "version: 1\nproject:\n  name: test"
+        val resultYaml = manager.migrate(yamlInput, 1)
+
+        assertTrue(resultYaml.contains("version: 3"))
+        assertEquals(1, v1ToV2.executeCount, "V1->V2 should execute once")
+        assertEquals(1, v2ToV3.executeCount, "V2->V3 should execute once")
+    }
+
+    @Test
+    fun `Test3 - upload current version 3 should execute zero migrations`() {
+        val v1ToV2 = MockV1ToV2Migration()
+        val v2ToV3 = MockV2ToV3Migration()
+        val manager = ConfigMigrationManager(listOf(v1ToV2, v2ToV3))
+
+        val yamlInput = "version: 3\nproject:\n  name: test"
+        val resultYaml = manager.migrate(yamlInput, 3)
+
+        assertTrue(resultYaml.contains("version: 3"))
+        assertEquals(0, v1ToV2.executeCount)
+        assertEquals(0, v2ToV3.executeCount)
+    }
+
+    @Test
+    fun `Test4 - upload future version 999 should execute zero migrations`() {
+        val manager = ConfigMigrationManager(emptyList())
+
+        // 验证 hasMigration / canUpgrade 的逻辑
+        assertFalse(manager.hasMigration(999))
+
+        // 如果直接跑 migrate 传入 999，因为找不到对应 migration 会直接跳过返回原样
+        val yamlInput = "version: 999\nproject:\n  name: test"
+        val resultYaml = manager.migrate(yamlInput, 999)
+        assertTrue(resultYaml.contains("version: 999"))
+    }
+}

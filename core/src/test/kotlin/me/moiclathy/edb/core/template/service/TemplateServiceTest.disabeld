@@ -1,0 +1,188 @@
+package me.moiclathy.edb.core.template.service
+
+import io.mockk.*
+import me.moiclathy.edb.core.template.exception.TemplateAlreadyExistsException
+import me.moiclathy.edb.core.template.exception.TemplateNotFoundException
+import me.moiclathy.edb.core.template.model.*
+import me.moiclathy.edb.core.template.repository.TemplateRepository
+import me.moiclathy.edb.core.template.validation.TemplateValidationResult
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.time.LocalDateTime
+
+class TemplateServiceTest {
+
+    private lateinit var repository: TemplateRepository
+    private lateinit var validator: TemplateValidationService
+    private lateinit var service: TemplateService
+
+    private val sampleTemplate = Template(
+        id = 1L,
+        name = "Test Template",
+        description = "Description",
+        type = TemplateType.EXPERIMENT,
+        visibility = TemplateVisibility.PUBLIC,
+        metadata = TemplateMetadata(
+            author = "Moiclathy",
+            version = 1,
+            createdAt = java.time.Instant.now(),
+            updatedAt = java.time.Instant.now()
+        ),
+        yaml = "key: value"
+    )
+
+    @BeforeEach
+    fun setUp() {
+        repository = mockk()
+        validator = mockk()
+        service = TemplateService(repository, validator)
+    }
+
+    @Test
+    fun create_normal_should_call_save() {
+        every { validator.validate(any()) } returns TemplateValidationResult(true, emptyList())
+        every { repository.exists(any()) } returns false
+        every { repository.save(any()) } returns sampleTemplate
+
+        val result = service.create(sampleTemplate)
+
+        assertEquals(sampleTemplate, result)
+        verify(exactly = 1) { repository.save(sampleTemplate) }
+    }
+
+    @Test
+    fun create_duplicate_name_should_throw_exception() {
+        every { validator.validate(any()) } returns TemplateValidationResult(true, emptyList())
+        every { repository.exists(sampleTemplate.name) } returns true
+
+        assertThrows<TemplateAlreadyExistsException> {
+            service.create(sampleTemplate)
+        }
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
+    fun create_invalid_template_should_throw_exception() {
+        every { validator.validate(any()) } returns TemplateValidationResult(false, listOf("Invalid"))
+
+        assertThrows<IllegalArgumentException> {
+            service.create(sampleTemplate)
+        }
+        verify(exactly = 0) { repository.save(any()) }
+    }
+
+    @Test
+    fun load_existing_should_return_template() {
+        every { repository.findById(1L) } returns sampleTemplate
+
+        val result = service.load(1L)
+
+        assertEquals(sampleTemplate, result)
+    }
+
+    @Test
+    fun load_non_existing_should_throw_exception() {
+        every { repository.findById(999L) } returns null
+
+        assertThrows<TemplateNotFoundException> {
+            service.load(999L)
+        }
+    }
+
+    @Test
+    fun update_normal_should_call_update() {
+        every { validator.validate(any()) } returns TemplateValidationResult(true, emptyList())
+        every { repository.findById(1L) } returns sampleTemplate
+        every { repository.exists(any()) } returns false
+        every { repository.update(any()) } returns sampleTemplate
+
+        val result = service.update(sampleTemplate)
+
+        assertEquals(sampleTemplate, result)
+        verify(exactly = 1) { repository.update(sampleTemplate) }
+    }
+
+    @Test
+    fun update_null_id_should_throw_exception() {
+        val invalidTemplate = sampleTemplate.copy(id = null)
+
+        assertThrows<IllegalArgumentException> {
+            service.update(invalidTemplate)
+        }
+        verify(exactly = 0) { repository.update(any()) }
+    }
+
+    @Test
+    fun update_non_existing_should_throw_exception() {
+        every { validator.validate(any()) } returns TemplateValidationResult(true, emptyList())
+        every { repository.findById(1L) } returns null
+
+        assertThrows<TemplateNotFoundException> {
+            service.update(sampleTemplate)
+        }
+        verify(exactly = 0) { repository.update(any()) }
+    }
+
+    @Test
+    fun update_duplicate_name_should_throw_exception() {
+        val updatedTemplate = sampleTemplate.copy(name = "New Name")
+        every { validator.validate(any()) } returns TemplateValidationResult(true, emptyList())
+        every { repository.findById(1L) } returns sampleTemplate
+        every { repository.exists("New Name") } returns true
+
+        assertThrows<TemplateAlreadyExistsException> {
+            service.update(updatedTemplate)
+        }
+        verify(exactly = 0) { repository.update(any()) }
+    }
+
+    @Test
+    fun delete_existing_should_call_delete() {
+        every { repository.findById(1L) } returns sampleTemplate
+        every { repository.delete(1L) } just Runs
+
+        service.delete(1L)
+
+        verify(exactly = 1) { repository.delete(1L) }
+    }
+
+    @Test
+    fun delete_non_existing_should_throw_exception() {
+        every { repository.findById(999L) } returns null
+
+        assertThrows<TemplateNotFoundException> {
+            service.delete(999L)
+        }
+        verify(exactly = 0) { repository.delete(any()) }
+    }
+
+    @Test
+    fun search_should_call_repository_search() {
+        val query = TemplateQuery(keyword = "test")
+        val summaries = listOf(
+            TemplateSummary(
+                id = 1L,
+                name = "Test",
+                type = TemplateType.EXPERIMENT,
+                visibility = TemplateVisibility.PUBLIC
+            )
+        )
+        every { repository.search(query) } returns summaries
+
+        val result = service.search(query)
+
+        assertEquals(summaries, result)
+        verify(exactly = 1) { repository.search(query) }
+    }
+    @Test
+    fun count_should_call_repository_count() {
+        every { repository.count() } returns 5L
+
+        val result = service.count()
+
+        assertEquals(5L, result)
+        verify(exactly = 1) { repository.count() }
+    }
+}

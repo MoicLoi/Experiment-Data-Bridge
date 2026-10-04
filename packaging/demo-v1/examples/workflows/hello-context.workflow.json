@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "demo-hello-context",
+  "steps": [
+    { "id": "set-message", "type": "context.set", "config": { "key": "message", "value": "Hello from EDB Demo v1" } },
+    { "id": "copy-message", "type": "context.copy", "config": { "from": "message", "to": "result" } }
+  ]
+}

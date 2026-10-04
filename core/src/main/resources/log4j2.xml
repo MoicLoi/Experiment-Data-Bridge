@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Configuration status="WARN" monitorInterval="30">
+
+    <Properties>
+
+        <Property name="LOG_PATTERN">
+            %d{yyyy-MM-dd HH:mm:ss.SSS}
+            [%thread]
+            %-5level
+            %logger{36}
+            -
+            %msg%n
+        </Property>
+
+        <Property name="LOG_PATH">
+            logs
+        </Property>
+
+    </Properties>
+
+
+    <Appenders>
+
+
+        <Console name="Console">
+
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+
+        </Console>
+
+
+        <RollingFile
+                name="RollingFile"
+                fileName="${LOG_PATH}/app.log"
+                filePattern="${LOG_PATH}/app-%d{yyyy-MM-dd}-%i.log.gz">
+
+
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+
+
+            <Policies>
+
+                <TimeBasedTriggeringPolicy interval="1"
+                                           modulate="true"/>
+
+                <SizeBasedTriggeringPolicy size="100MB"/>
+
+            </Policies>
+
+
+            <DefaultRolloverStrategy max="30"/>
+
+
+        </RollingFile>
+
+
+
+        <RollingFile
+                name="AuditFile"
+                fileName="${LOG_PATH}/audit.log"
+                filePattern="${LOG_PATH}/audit-%d{yyyy-MM-dd}-%i.log.gz">
+
+
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+
+
+            <Policies>
+
+                <TimeBasedTriggeringPolicy interval="1"
+                                           modulate="true"/>
+
+                <SizeBasedTriggeringPolicy size="100MB"/>
+
+            </Policies>
+
+
+            <DefaultRolloverStrategy max="365"/>
+
+
+        </RollingFile>
+
+        <RollingFile
+                name="DebugFile"
+                fileName="${LOG_PATH}/debug.log"
+                filePattern="${LOG_PATH}/debug-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="25MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+
+    </Appenders>
+
+
+
+    <Loggers>
+
+
+        <Logger
+                name="com.experiment.bridge"
+                level="DEBUG"
+                additivity="false">
+
+
+            <AppenderRef ref="Console"/>
+
+            <AppenderRef ref="RollingFile"/>
+
+
+        </Logger>
+
+
+
+        <Logger
+                name="com.experiment.bridge.audit"
+                level="INFO"
+                additivity="false">
+
+
+            <AppenderRef ref="AuditFile"/>
+
+
+        </Logger>
+
+        <Logger
+                name="FrontendDebug"
+                level="INFO"
+                additivity="false">
+            <AppenderRef ref="DebugFile"/>
+        </Logger>
+
+
+
+        <Root level="INFO">
+
+            <AppenderRef ref="Console"/>
+
+            <AppenderRef ref="RollingFile"/>
+
+        </Root>
+
+
+    </Loggers>
+
+
+</Configuration>

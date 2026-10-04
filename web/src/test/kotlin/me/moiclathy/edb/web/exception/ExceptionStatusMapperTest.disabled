@@ -1,0 +1,69 @@
+package me.moiclathy.edb.web.exception
+
+import io.ktor.http.HttpStatusCode
+import me.moiclathy.edb.core.exception.EDBException
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+
+class ExceptionStatusMapperTest {
+
+    @Test
+    fun `template not found should map to 404`() {
+
+        val exception =
+            EDBException(
+                code = "TEMPLATE_NOT_FOUND",
+                message = "Template not found"
+            )
+
+        assertEquals(
+            HttpStatusCode.NotFound,
+            ExceptionStatusMapper.status(exception)
+        )
+    }
+
+    @Test
+    fun `template validation failure should map to 400`() {
+
+        val exception =
+            EDBException(
+                code = "TEMPLATE_VALIDATION_FAILED",
+                message = "Invalid template"
+            )
+
+        assertEquals(
+            HttpStatusCode.BadRequest,
+            ExceptionStatusMapper.status(exception)
+        )
+    }
+
+    @Test
+    fun `template conflict should map to 409`() {
+
+        val exception =
+            EDBException(
+                code = "TEMPLATE_ALREADY_EXISTS",
+                message = "Template already exists"
+            )
+
+        assertEquals(
+            HttpStatusCode.Conflict,
+            ExceptionStatusMapper.status(exception)
+        )
+    }
+
+    @Test
+    fun `unknown business exception should map to 400`() {
+
+        val exception =
+            EDBException(
+                code = "UNKNOWN_BUSINESS_ERROR",
+                message = "Unknown error"
+            )
+
+        assertEquals(
+            HttpStatusCode.BadRequest,
+            ExceptionStatusMapper.status(exception)
+        )
+    }
+}

@@ -1,0 +1,91 @@
+package me.moiclathy.edb.core.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.config.preview.ConfigurationPreview
+import me.moiclathy.edb.core.database.model.Project
+import me.moiclathy.edb.core.database.repository.ProjectRepository
+import me.moiclathy.edb.core.git.*
+import me.moiclathy.edb.core.security.PermissionChecker
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+
+class ProjectConfigurationServicePreviewTest {
+
+    private val repository = mockk<ProjectRepository>()
+    private val gitCommitService = mockk<GitCommitService>()
+    private val gitHistoryService = mockk<GitHistoryService>()
+    private val gitDiffService = mockk<GitDiffService>()
+    private val permissionChecker = mockk<PermissionChecker>()
+    private val gitRestoreService = mockk<GitRestoreService>()
+    private val yamlValidationService = mockk<me.moiclathy.edb.core.config.schema.YamlValidationService>()
+    private val gitPreviewService = mockk<GitPreviewService>()
+
+    private val configurationService = ProjectConfigurationService(
+        repository = repository,
+        gitCommitService = gitCommitService,
+        gitHistoryService = gitHistoryService,
+        gitDiffService = gitDiffService,
+        permissionChecker = permissionChecker,
+        gitRestoreService = gitRestoreService,
+        yamlValidationService = yamlValidationService,
+        gitPreviewService = gitPreviewService
+    )
+
+    @Test
+    fun `previewCurrentConfigurationShouldUseDatabaseAndSkipGit`() {
+        // Arrange
+        val projectId = 1
+        val userId = 100
+        val expectedYaml = "version: 1\nproject:\n  name: current"
+        val mockProject = mockk<Project> {
+            every { id } returns projectId
+            every { name } returns "test"
+            every { configYaml } returns expectedYaml
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns true
+
+        // Act
+        val preview = configurationService.preview(projectId, userId, null)
+
+        // Assert
+        assertEquals(expectedYaml, preview.yaml)
+
+        // Verify
+        verify(exactly = 0) {
+            gitPreviewService.preview(any(), any())
+        }
+    }
+
+    @Test
+    fun `previewHistoricalConfigurationShouldDelegateToGitPreviewService`() {
+        // Arrange
+        val projectId = 1
+        val userId = 100
+        val commitId = "abc1234"
+        val expectedYaml = "version: 1\nproject:\n  name: historical"
+        val mockProject = mockk<Project> {
+            every { id } returns projectId
+            every { name } returns "test"
+            every { configYaml } returns "current"
+        }
+
+        every { repository.findById(projectId) } returns mockProject
+        every { permissionChecker.requireReadable(userId, mockProject) } returns true
+        every { gitPreviewService.preview(projectId, commitId) } returns ConfigurationPreview(yaml = expectedYaml)
+
+        // Act
+        val preview = configurationService.preview(projectId, userId, commitId)
+
+        // Assert
+        assertEquals(expectedYaml, preview.yaml)
+
+        // Verify
+        verify(exactly = 1) {
+            gitPreviewService.preview(projectId, commitId)
+        }
+    }
+}

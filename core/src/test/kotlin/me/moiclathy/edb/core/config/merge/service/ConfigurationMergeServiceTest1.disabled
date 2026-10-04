@@ -1,0 +1,58 @@
+package me.moiclathy.edb.core.config.merge.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.config.merge.MergeConflict
+import me.moiclathy.edb.core.config.merge.MergeEngine
+import me.moiclathy.edb.core.config.merge.MergeResult
+import me.moiclathy.edb.core.config.snapshot.model.ConfigurationSnapshot
+import me.moiclathy.edb.core.config.snapshot.service.ConfigurationSnapshotService
+import me.moiclathy.edb.core.service.AuditService
+import org.junit.jupiter.api.Test
+
+class ConfigurationMergeServiceTest {
+    private val snapshotService = mockk<ConfigurationSnapshotService>(relaxed = true)
+    private val mergeEngine = mockk<MergeEngine>()
+    private val auditService = mockk<AuditService>(relaxed = true)
+    private val service = ConfigurationMergeService(snapshotService, mergeEngine, auditService)
+
+    @Test
+    fun `successfulMerge should record audit`() {
+        // 1. Mock 两个非空的合法 Snapshot
+        val targetSnapshot = ConfigurationSnapshot(id = 1, projectId = 1, version = 1, metadata = mockk(), yaml = "key: value1")
+        val sourceSnapshot = ConfigurationSnapshot(id = 2, projectId = 1, version = 1, metadata = mockk(), yaml = "key: value2")
+
+        every { snapshotService.getSnapshot(1) } returns targetSnapshot
+        every { snapshotService.getSnapshot(2) } returns sourceSnapshot
+
+        val result = MergeResult(merged = mapOf("a" to 1), conflicts = emptyList())
+        every { mergeEngine.merge(any()) } returns result
+
+        service.mergeSnapshots(1, 2, 1)
+
+        verify(exactly = 1) {
+            auditService.record(userId = 1, action = "CONFIGURATION_MERGE", resourceType = "CONFIGURATION_MERGE", resourceId = 1, details = any())
+        }
+    }
+    @Test
+    fun `conflictedMerge should record conflict audit`() {
+        val targetSnapshot = ConfigurationSnapshot(id = 1, projectId = 1, version = 1, metadata = mockk(), yaml = "key: value1")
+        val sourceSnapshot = ConfigurationSnapshot(id = 2, projectId = 1, version = 1, metadata = mockk(), yaml = "key: value2")
+
+        every { snapshotService.getSnapshot(1) } returns targetSnapshot
+        every { snapshotService.getSnapshot(2) } returns sourceSnapshot
+
+        // 👉 改成 relaxed = true，让 MockK 自动处理所有属性的默认返回值（如空字符串、0等）
+        val mockConflict = mockk<MergeConflict>(relaxed = true)
+        val result = MergeResult(merged = emptyMap(), conflicts = listOf(mockConflict))
+
+        every { mergeEngine.merge(any()) } returns result
+
+        service.mergeSnapshots(1, 2, 1)
+
+        verify(exactly = 1) {
+            auditService.record(userId = 1, action = "CONFIGURATION_MERGE_CONFLICT", resourceType = "CONFIGURATION_MERGE", resourceId = 1, details = match { it.contains("conflicts=") })
+        }
+    }
+}

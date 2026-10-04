@@ -1,0 +1,63 @@
+package me.moiclathy.edb.core.config.packages.validation
+
+import me.moiclathy.edb.core.config.packages.EdbManifest
+import me.moiclathy.edb.core.config.packages.PackageVersion
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+import java.time.Instant
+
+class PackageManifestValidatorTest {
+
+    private val validator = PackageManifestValidator()
+
+    private fun createValidManifest(
+        packageVersion: Int = PackageVersion.CURRENT,
+        projectName: String = "Test Project",
+        edbVersion: String = "0.22.3"
+    ) = EdbManifest(
+        packageVersion = packageVersion,
+        edbVersion = edbVersion,
+        projectName = projectName,
+        projectId = 1,
+        author = "admin",
+        exportedAt = Instant.now()
+    )
+
+    @Test
+    fun testPackageVersionCurrentIsValid() {
+        val manifest = createValidManifest(packageVersion = PackageVersion.CURRENT)
+        val result = validator.validate(manifest)
+
+        assertTrue(result.valid)
+        assertTrue(result.errors.isEmpty())
+    }
+
+    @Test
+    fun testPackageVersionBelowMinIsInvalid() {
+        val manifest = createValidManifest(packageVersion = PackageVersion.MIN - 1)
+        val result = validator.validate(manifest)
+
+        assertFalse(result.valid)
+        assertEquals(1, result.errors.size)
+        assertEquals("packageVersion", result.errors[0].field)
+    }
+
+    @Test
+    fun testPackageVersionAboveCurrentIsInvalid() {
+        val manifest = createValidManifest(packageVersion = PackageVersion.CURRENT + 1)
+        val result = validator.validate(manifest)
+
+        assertFalse(result.valid)
+        assertEquals(1, result.errors.size)
+        assertEquals("packageVersion", result.errors[0].field)
+    }
+
+    @Test
+    fun testBlankProjectNameIsInvalid() {
+        val manifest = createValidManifest(projectName = "   ")
+        val result = validator.validate(manifest)
+
+        assertFalse(result.valid)
+        assertTrue(result.errors.any { it.field == "projectName" })
+    }
+}

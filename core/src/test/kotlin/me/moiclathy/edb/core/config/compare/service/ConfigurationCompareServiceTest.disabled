@@ -1,0 +1,42 @@
+package me.moiclathy.edb.core.config.compare.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.config.merge.MergeEngine
+import me.moiclathy.edb.core.config.merge.MergeResult
+import me.moiclathy.edb.core.config.snapshot.model.ConfigurationSnapshot
+import me.moiclathy.edb.core.config.snapshot.repository.ConfigurationSnapshotRepository
+import me.moiclathy.edb.core.config.snapshot.service.ConfigurationSnapshotService
+import me.moiclathy.edb.core.security.PasswordService.verify
+import me.moiclathy.edb.core.service.AuditService
+import org.junit.jupiter.api.Test
+
+class ConfigurationCompareServiceTest {
+    private val repository = mockk<ConfigurationSnapshotRepository>(relaxed = true)
+    private val auditService = mockk<AuditService>(relaxed = true)
+    private val service = ConfigurationCompareService(repository, auditService)
+
+    @Test
+    fun `compare should record audit`() {
+        // 准备mock数据 (sourceSnapshot & targetSnapshot)
+        every { repository.findById(any()) } returns ConfigurationSnapshot(1, 1, 1, mockk(), "key: value")
+
+        service.compare(1, 2, 1)
+
+        verify(exactly = 1) {
+            auditService.record(userId = 1, action = "CONFIGURATION_COMPARE", resourceType = "CONFIGURATION_COMPARE", resourceId = 2, details = any())
+        }
+    }
+
+    @Test
+    fun `compare should record difference count`() {
+        every { repository.findById(any()) } returns ConfigurationSnapshot(1, 1, 1, mockk(), "key: value")
+
+        service.compare(1, 2, 1)
+
+        verify(exactly = 1) {
+            auditService.record(userId = 1, action = "CONFIGURATION_COMPARE", resourceType = "CONFIGURATION_COMPARE", resourceId = 2, details = match { it.contains("differences=") })
+        }
+    }
+}

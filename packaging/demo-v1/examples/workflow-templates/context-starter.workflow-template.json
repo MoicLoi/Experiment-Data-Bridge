@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "context-starter",
+  "version": "1.0.0",
+  "title": "Guided context workflow",
+  "description": "A small runnable workflow that demonstrates ordered steps and context hand-off.",
+  "category": "getting-started",
+  "tags": ["starter", "runnable"],
+  "workflow": {
+    "schemaVersion": 1,
+    "id": "my-first-workflow",
+    "version": "1.0.0",
+    "description": "Set and forward a value through Pipeline context.",
+    "inputs": [],
+    "outputs": [{"name": "result", "contextKey": "result", "required": true}],
+    "steps": [
+      {
+        "id": "set-message", "type": "context.set", "version": "1", "order": 0,
+        "dependsOn": [], "parameters": {"key": "message", "value": "Hello from EDB"},
+        "contextBindings": [], "outputBindings": [],
+        "policy": {"retry": {"maxAttempts": 1, "initialDelayMs": 1000, "backoffMultiplier": 2.0, "maxDelayMs": 60000}, "failureStrategy": "STOP_WORKFLOW"}
+      },
+      {
+        "id": "copy-message", "type": "context.copy", "version": "1", "order": 1,
+        "dependsOn": ["set-message"], "parameters": {"from": "message", "to": "result"},
+        "contextBindings": [], "outputBindings": [],
+        "policy": {"retry": {"maxAttempts": 1, "initialDelayMs": 1000, "backoffMultiplier": 2.0, "maxDelayMs": 60000}, "failureStrategy": "STOP_WORKFLOW"}
+      }
+    ]
+  }
+}

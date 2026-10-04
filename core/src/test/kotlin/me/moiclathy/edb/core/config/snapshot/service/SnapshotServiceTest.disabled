@@ -1,0 +1,37 @@
+package me.moiclathy.edb.core.config.snapshot.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.config.snapshot.model.ConfigurationSnapshot
+import me.moiclathy.edb.core.config.snapshot.repository.ConfigurationSnapshotRepository
+import me.moiclathy.edb.core.security.PasswordService.verify
+import me.moiclathy.edb.core.service.AuditService
+import org.junit.jupiter.api.Test
+
+class SnapshotServiceTest {
+    private val repository = mockk<ConfigurationSnapshotRepository>(relaxed = true)
+    private val auditService = mockk<AuditService>(relaxed = true)
+    private val service = ConfigurationSnapshotService(repository, auditService)
+
+    @Test
+    fun `createSnapshot should record audit`() {
+        val snapshot = ConfigurationSnapshot(id = 101, projectId = 1, yaml = "data", version = 1, metadata = mockk())
+        every { repository.save(any()) } returns snapshot
+
+        service.createSnapshot(1, "yaml", "1")
+
+        verify(exactly = 1) {
+            auditService.recordSnapshotCreate(101, 1, 1)
+        }
+    }
+
+    @Test
+    fun `deleteSnapshot should record audit`() {
+        service.deleteSnapshot(101, 1)
+
+        verify(exactly = 1) {
+            auditService.recordSnapshotDelete(101, 1)
+        }
+    }
+}

@@ -1,0 +1,55 @@
+package me.moiclathy.edb.core.config.packages.zip
+
+import me.moiclathy.edb.core.config.packages.EdbManifest
+import me.moiclathy.edb.core.config.packages.EdbPackage
+import me.moiclathy.edb.core.config.packages.serializer.SnakeYamlManifestDeserializer
+import me.moiclathy.edb.core.config.packages.serializer.SnakeYamlManifestSerializer
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.time.Instant
+
+class EdbPackageRoundTripTest {
+
+    @Test
+    fun `test edb package write and read round trip should be identical`() {
+        // 1. 准备原始的 EdbPackage 数据
+        val originalManifest = EdbManifest(
+            packageVersion = 1,
+            edbVersion = "0.22.0",
+            projectName = "Experiment-Alpha",
+            projectId = 2,
+            author = "admin",
+            exportedAt = Instant.now()
+        )
+        val originalConfig = "version: 2\nproject:\n  name: Experiment-Alpha"
+
+        val originalPackage = EdbPackage(
+            manifest = originalManifest,
+            configuration = originalConfig
+        )
+
+        // 2. 写入到内存字节数组 (Writer)
+        val outputStream = ByteArrayOutputStream()
+        val manifestSerializer = SnakeYamlManifestSerializer()
+        val writer = ZipEdbPackageWriter(manifestSerializer)
+
+        writer.write(originalPackage, outputStream)
+        val packageBytes = outputStream.toByteArray()
+
+        // 3. 从内存字节数组中读取还原 (Reader)
+// 3. 从内存字节数组中读取还原 (Reader)
+        val inputStream = ByteArrayInputStream(packageBytes)
+
+        val manifestDeserializer = SnakeYamlManifestDeserializer() // 使用独立的Deserializer
+
+        val reader = ZipEdbPackageReader(manifestDeserializer)
+        val restoredPackage = reader.read(inputStream)
+        // 4. 断言解包后的内容与原始内容完全一致
+        assertEquals(originalPackage.manifest.projectName, restoredPackage.manifest.projectName)
+        assertEquals(originalPackage.manifest.projectId, restoredPackage.manifest.projectId)
+        assertEquals(originalPackage.manifest.author, restoredPackage.manifest.author)
+        assertEquals(originalPackage.configuration.trim(), restoredPackage.configuration.trim())
+    }
+}

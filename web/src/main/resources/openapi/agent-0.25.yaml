@@ -1,0 +1,607 @@
+openapi: 3.0.3
+info:
+  title: Experiment Data Bridge Agent API
+  version: 0.25.0
+  description: User-delegated Workflow planning Agent sessions, runs, proposals, audit, and SSE events. Planning never executes a Workflow.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Agent administration
+  - name: Agent model profiles
+  - name: Agent sessions
+  - name: Agent runs
+  - name: Agent proposals
+  - name: Agent lifecycle
+paths:
+  /projects/{projectId}/agent-token-quota:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      tags: [Agent administration]
+      operationId: getAgentTokenQuota
+      summary: Get the current user's and project's daily Agent Token quota
+      responses:
+        '200': { description: Daily Token quota usage, content: { application/json: { schema: { $ref: '#/components/schemas/AgentTokenQuotaResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/agent-providers:
+    get:
+      tags: [Agent administration]
+      operationId: listAgentProviderStatuses
+      summary: List sanitized Provider configuration and passive health state
+      responses:
+        '200': { description: Provider status catalog, content: { application/json: { schema: { $ref: '#/components/schemas/AgentProviderStatusListResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/agent-model-metrics:
+    get:
+      tags: [Agent administration]
+      operationId: listAgentModelMetrics
+      responses:
+        '200': { description: Per-profile model calls, Token usage and latency, content: { application/json: { schema: { $ref: '#/components/schemas/AgentModelMetricsListResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/agent-metrics:
+    get:
+      tags: [Agent administration]
+      operationId: getAgentMetrics
+      responses:
+        '200': { description: Agent runtime metrics, content: { application/json: { schema: { $ref: '#/components/schemas/AgentMetricsResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/agent-retention:
+    get:
+      tags: [Agent administration]
+      operationId: getAgentRetention
+      responses:
+        '200': { description: Agent retention policy and last result, content: { application/json: { schema: { $ref: '#/components/schemas/AgentRetentionOverviewResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/agent-retention/estimate:
+    get:
+      tags: [Agent administration]
+      operationId: estimateAgentRetention
+      responses:
+        '200': { description: Expired Agent Run estimate, content: { application/json: { schema: { $ref: '#/components/schemas/AgentRetentionEstimateResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/agent-retention/cleanup:
+    post:
+      tags: [Agent administration]
+      operationId: cleanupAgentRetention
+      responses:
+        '200': { description: Agent cleanup result, content: { application/json: { schema: { $ref: '#/components/schemas/AgentRetentionCleanupResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/agent-retention/last-result:
+    get:
+      tags: [Agent administration]
+      operationId: getLastAgentRetentionResult
+      responses:
+        '200': { description: Last Agent cleanup result, content: { application/json: { schema: { $ref: '#/components/schemas/AgentRetentionCleanupResponse' } } } }
+        '204': { description: No cleanup has run in this process }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /agent-model-profiles:
+    get:
+      tags: [Agent model profiles]
+      operationId: listAgentModelProfiles
+      summary: List selectable Agent model profiles without exposing secrets
+      responses:
+        '200':
+          description: Read-only model profile catalog
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentModelProfileCatalogResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /projects/{projectId}/agent-sessions:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      tags: [Agent sessions]
+      operationId: createAgentSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAgentSessionRequest' }
+      responses:
+        '201': { description: Session created, content: { application/json: { schema: { $ref: '#/components/schemas/AgentSessionResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [Agent sessions]
+      operationId: getAgentSession
+      responses:
+        '200': { description: Session, content: { application/json: { schema: { $ref: '#/components/schemas/AgentSessionResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-sessions/{sessionId}/close:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Agent sessions]
+      operationId: closeAgentSession
+      responses:
+        '200': { description: Closed session, content: { application/json: { schema: { $ref: '#/components/schemas/AgentSessionResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-sessions/{sessionId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Agent sessions]
+      operationId: planAgentWorkflow
+      summary: Start asynchronous Workflow planning without executing it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanAgentWorkflowRequest' }
+      responses:
+        '202': { description: Planning Run started, content: { application/json: { schema: { $ref: '#/components/schemas/AgentRunAcceptedResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    get:
+      tags: [Agent sessions]
+      operationId: listAgentSessionMessages
+      summary: List bounded user and assistant Chat Memory messages
+      responses:
+        '200':
+          description: Session Chat Memory
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSessionMessageListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-sessions/{sessionId}/events:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [Agent lifecycle]
+      operationId: streamAgentSessionEvents
+      responses:
+        '200':
+          description: Agent lifecycle SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-runs/{runId}:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Agent runs]
+      operationId: getAgentRun
+      responses:
+        '200': { description: Run, content: { application/json: { schema: { $ref: '#/components/schemas/AgentRunResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-runs/{runId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    post:
+      tags: [Agent runs]
+      operationId: cancelAgentRun
+      responses:
+        '200': { description: Cancelled or already terminal Run, content: { application/json: { schema: { $ref: '#/components/schemas/AgentRunResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-runs/{runId}/proposals:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Agent proposals]
+      operationId: listAgentRunProposals
+      responses:
+        '200':
+          description: Proposals generated by the run
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/AgentWorkflowProposalResponse' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-runs/{runId}/audit:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Agent lifecycle]
+      operationId: getAgentRunAudit
+      responses:
+        '200': { description: Complete run audit timeline, content: { application/json: { schema: { $ref: '#/components/schemas/AgentAuditTimelineResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-proposals/{proposalId}:
+    parameters:
+      - $ref: '#/components/parameters/ProposalId'
+    get:
+      tags: [Agent proposals]
+      operationId: getAgentProposal
+      responses:
+        '200': { description: Workflow proposal, content: { application/json: { schema: { $ref: '#/components/schemas/AgentWorkflowProposalResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-proposals/{proposalId}/decision:
+    parameters:
+      - $ref: '#/components/parameters/ProposalId'
+    get:
+      tags: [Agent proposals]
+      operationId: getAgentProposalDecision
+      responses:
+        '200': { description: Proposal decision, content: { application/json: { schema: { $ref: '#/components/schemas/AgentProposalDecisionResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-proposals/{proposalId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/ProposalId'
+    post:
+      tags: [Agent proposals]
+      operationId: approveAgentProposal
+      summary: Revalidate and approve a proposal without executing it
+      responses:
+        '200': { description: Approved or existing idempotent approval, content: { application/json: { schema: { $ref: '#/components/schemas/AgentProposalDecisionResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /agent-proposals/{proposalId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/ProposalId'
+    post:
+      tags: [Agent proposals]
+      operationId: rejectAgentProposal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RejectAgentProposalRequest' }
+      responses:
+        '200': { description: Rejected or existing idempotent rejection, content: { application/json: { schema: { $ref: '#/components/schemas/AgentProposalDecisionResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /agent-proposals/{proposalId}/submission:
+    parameters:
+      - $ref: '#/components/parameters/ProposalId'
+    get:
+      tags: [Agent proposals]
+      operationId: getAgentProposalSubmission
+      responses:
+        '200': { description: Persisted Workflow definition and Task association, content: { application/json: { schema: { $ref: '#/components/schemas/AgentProposalSubmissionResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-proposals/{proposalId}/submit:
+    parameters:
+      - $ref: '#/components/parameters/ProposalId'
+    post:
+      tags: [Agent proposals]
+      operationId: submitAgentProposal
+      summary: Idempotently materialize an approved proposal and enqueue its Workflow task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitAgentProposalRequest' }
+      responses:
+        '202': { description: Existing or newly queued Task, content: { application/json: { schema: { $ref: '#/components/schemas/AgentProposalSubmissionResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ProjectId: { name: projectId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    SessionId: { name: sessionId, in: path, required: true, schema: { type: string, minLength: 1 } }
+    RunId: { name: runId, in: path, required: true, schema: { type: string, minLength: 1 } }
+    ProposalId: { name: proposalId, in: path, required: true, schema: { type: string, minLength: 1 } }
+  responses:
+    BadRequest: { description: Invalid Agent request, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Unauthorized: { description: Missing or invalid JWT, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Forbidden: { description: User cannot access the project or Agent resource, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    NotFound: { description: Agent resource not found, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Conflict: { description: Proposal already has the opposite decision, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+  schemas:
+    AgentTokenQuotaResponse:
+      type: object
+      required: [enabled, date, items]
+      properties:
+        enabled: { type: boolean }
+        date: { type: string, format: date }
+        items: { type: array, items: { $ref: '#/components/schemas/AgentTokenQuotaUsageResponse' } }
+    AgentTokenQuotaUsageResponse:
+      type: object
+      required: [scope, scopeId, usedTokens, limit, remainingTokens]
+      properties:
+        scope: { type: string, enum: [USER, PROJECT] }
+        scopeId: { type: integer }
+        usedTokens: { type: integer, format: int64 }
+        limit: { type: integer, format: int64 }
+        remainingTokens: { type: integer, format: int64 }
+    AgentProviderStatusListResponse:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AgentProviderStatusResponse' } }
+    AgentProviderStatusResponse:
+      type: object
+      required: [id, providerId, modelName, builtIn, initialized, apiKeyConfigured, customEndpointConfigured, health, consecutiveFailures]
+      properties:
+        id: { type: string }
+        providerId: { type: string }
+        modelName: { type: string }
+        builtIn: { type: boolean }
+        initialized: { type: boolean }
+        apiKeyConfigured: { type: boolean }
+        customEndpointConfigured: { type: boolean }
+        health: { type: string, enum: [UNINITIALIZED, HEALTHY, DEGRADED, CIRCUIT_OPEN, HALF_OPEN] }
+        consecutiveFailures: { type: integer }
+        circuitOpenUntil: { type: string, format: date-time, nullable: true }
+    AgentModelMetricsListResponse:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AgentModelMetricsResponse' } }
+    AgentModelMetricsResponse:
+      type: object
+      required: [profileId, requests, successes, failures, fallbackUses, inputTokens, outputTokens, inFlight]
+      properties:
+        profileId: { type: string }
+        requests: { type: integer, format: int64 }
+        successes: { type: integer, format: int64 }
+        failures: { type: integer, format: int64 }
+        fallbackUses: { type: integer, format: int64 }
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+        inFlight: { type: integer, format: int64 }
+        averageLatencyMillis: { type: number, format: double, nullable: true }
+        lastCalledAt: { type: string, format: date-time, nullable: true }
+    AgentMetricsResponse:
+      type: object
+      required: [totalRuns, received, planning, validating, awaitingApproval, executing, waitingTask, completed, failed, cancelled, inputTokens, outputTokens, collectedAt]
+      properties:
+        totalRuns: { type: integer, format: int64 }
+        received: { type: integer, format: int64 }
+        planning: { type: integer, format: int64 }
+        validating: { type: integer, format: int64 }
+        awaitingApproval: { type: integer, format: int64 }
+        executing: { type: integer, format: int64 }
+        waitingTask: { type: integer, format: int64 }
+        completed: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        cancelled: { type: integer, format: int64 }
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+        averageExecutionMillis: { type: number, format: double, nullable: true }
+        collectedAt: { type: string, format: date-time }
+    AgentRetentionOverviewResponse:
+      type: object
+      required: [policy, started, running]
+      properties:
+        policy: { $ref: '#/components/schemas/AgentRetentionPolicyResponse' }
+        lastResult: { $ref: '#/components/schemas/AgentRetentionCleanupResponse', nullable: true }
+        started: { type: boolean }
+        running: { type: boolean }
+        lastStartedAt: { type: string, format: date-time, nullable: true }
+        lastFailure: { type: string, nullable: true }
+    AgentRetentionPolicyResponse:
+      type: object
+      required: [enabled, retentionDays, cleanupIntervalMinutes, initialDelayMinutes, batchSize, maxBatches]
+      properties:
+        enabled: { type: boolean }
+        retentionDays: { type: integer, format: int64 }
+        cleanupIntervalMinutes: { type: integer, format: int64 }
+        initialDelayMinutes: { type: integer, format: int64 }
+        batchSize: { type: integer }
+        maxBatches: { type: integer }
+    AgentRetentionEstimateResponse:
+      type: object
+      required: [cutoff, expiredRuns, collectedAt]
+      properties:
+        cutoff: { type: string, format: date-time }
+        expiredRuns: { type: integer, format: int64 }
+        collectedAt: { type: string, format: date-time }
+    AgentRetentionCleanupResponse:
+      type: object
+      required: [cutoff, deletedRuns, batches, completedAt]
+      properties:
+        cutoff: { type: string, format: date-time }
+        deletedRuns: { type: integer }
+        batches: { type: integer }
+        completedAt: { type: string, format: date-time }
+    AgentModelProfileCatalogResponse:
+      type: object
+      required: [defaultProfileId, items]
+      properties:
+        defaultProfileId: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AgentModelProfileResponse' }
+    AgentModelProfileResponse:
+      type: object
+      required: [id, providerId, modelName, toolCallingEnabled, structuredOutputEnabled, builtIn, default]
+      properties:
+        id: { type: string }
+        providerId: { type: string }
+        modelName: { type: string }
+        toolCallingEnabled: { type: boolean }
+        structuredOutputEnabled: { type: boolean }
+        builtIn: { type: boolean }
+        default: { type: boolean }
+    AgentSessionMessageListResponse:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AgentSessionMessageResponse' } }
+    AgentSessionMessageResponse:
+      type: object
+      required: [id, runId, role, content, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        runId: { type: string }
+        role: { type: string, enum: [USER, ASSISTANT] }
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+    CreateAgentSessionRequest:
+      type: object
+      properties:
+        agentId: { type: string, default: workflow-planner }
+        agentVersion: { type: string, default: '1' }
+    PlanAgentWorkflowRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1 }
+        maxRepairAttempts: { type: integer, minimum: 0, maximum: 10, default: 2 }
+    RejectAgentProposalRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1 }
+    AgentProposalDecisionResponse:
+      type: object
+      required: [proposalId, status, decidedBy, workflowSha256, decidedAt]
+      properties:
+        proposalId: { type: string }
+        status: { type: string, enum: [APPROVED, REJECTED] }
+        decidedBy: { type: integer }
+        workflowSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        reason: { type: string, nullable: true }
+        decidedAt: { type: string, format: date-time }
+    SubmitAgentProposalRequest:
+      type: object
+      properties:
+        context:
+          type: object
+          additionalProperties: { type: string }
+    AgentProposalSubmissionResponse:
+      type: object
+      required: [proposalId, definitionId, workflowId, definitionVersion, workflowSha256, task]
+      properties:
+        proposalId: { type: string }
+        definitionId: { type: integer, format: int64 }
+        workflowId: { type: string }
+        definitionVersion: { type: integer, minimum: 1 }
+        workflowSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        task: { type: object, description: Standard TaskResponse }
+    AgentSessionResponse:
+      type: object
+      required: [id, userId, projectId, agentId, agentVersion, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        userId: { type: integer }
+        projectId: { type: integer }
+        agentId: { type: string }
+        agentVersion: { type: string }
+        status: { type: string, enum: [ACTIVE, CLOSED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AgentRunResponse:
+      type: object
+      required: [id, sessionId, correlationId, status, modelProfileId, startedAt, updatedAt]
+      properties:
+        id: { type: string }
+        sessionId: { type: string }
+        correlationId: { type: string }
+        status: { type: string }
+        modelProfileId: { type: string }
+        inputTokens: { type: integer, format: int64, nullable: true }
+        outputTokens: { type: integer, format: int64, nullable: true }
+        failureCode: { type: string, nullable: true }
+        failureMessage: { type: string, nullable: true }
+        failureRetryable: { type: boolean, nullable: true }
+        startedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+    AgentValidationErrorResponse:
+      type: object
+      required: [path, message]
+      properties:
+        path: { type: string }
+        message: { type: string }
+    AgentWorkflowProposalResponse:
+      type: object
+      required: [id, runId, workflowIrJson, explanation, assumptions, warnings, valid, executionOrder, validationErrors, approvalRequired, createdAt]
+      properties:
+        id: { type: string }
+        runId: { type: string }
+        workflowIrJson: { type: string, description: Canonical strict Workflow IR JSON }
+        explanation: { type: string }
+        assumptions: { type: array, items: { type: string } }
+        warnings: { type: array, items: { type: string } }
+        valid: { type: boolean }
+        executionOrder: { type: array, items: { type: string } }
+        validationErrors: { type: array, items: { $ref: '#/components/schemas/AgentValidationErrorResponse' } }
+        approvalRequired: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    AgentPlanningResponse:
+      type: object
+      required: [session, run, proposal]
+      properties:
+        session: { $ref: '#/components/schemas/AgentSessionResponse' }
+        run: { $ref: '#/components/schemas/AgentRunResponse' }
+        proposal: { $ref: '#/components/schemas/AgentWorkflowProposalResponse' }
+    AgentRunAcceptedResponse:
+      type: object
+      required: [run]
+      properties:
+        run: { $ref: '#/components/schemas/AgentRunResponse' }
+    AgentAuditEventResponse:
+      type: object
+      required: [id, sessionId, actorUserId, projectId, type, detailsJson, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        sessionId: { type: string }
+        runId: { type: string, nullable: true }
+        actorUserId: { type: integer }
+        projectId: { type: integer }
+        type: { type: string }
+        runStatus: { type: string, nullable: true }
+        detailsJson: { type: string }
+        createdAt: { type: string, format: date-time }
+    AgentAuditTimelineResponse:
+      type: object
+      required: [runId, events]
+      properties:
+        runId: { type: string }
+        events: { type: array, items: { $ref: '#/components/schemas/AgentAuditEventResponse' } }
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }

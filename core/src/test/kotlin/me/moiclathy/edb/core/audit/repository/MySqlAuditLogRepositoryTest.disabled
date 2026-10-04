@@ -1,0 +1,150 @@
+package me.moiclathy.edb.core.audit.repository
+
+import me.moiclathy.edb.core.audit.model.AuditLogQuery
+import me.moiclathy.edb.core.database.repository.AuditRepository
+import me.moiclathy.edb.core.database.table.AuditLogsTable
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.deleteAll
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+
+class MySqlAuditLogRepositoryTest {
+
+    private lateinit var repository: MySqlAuditLogRepository
+    private lateinit var auditRepository: AuditRepository
+
+    @BeforeEach
+    fun setUp() {
+        // 👉 核心修复：在每次测试前初始化 H2 内存数据库连接
+        Database.connect(
+            url = "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;",
+            driver = "org.h2.Driver"
+        )
+
+        repository = MySqlAuditLogRepository()
+        auditRepository = AuditRepository()
+
+        transaction {
+            SchemaUtils.create(AuditLogsTable)
+        }
+    }
+
+    @AfterEach
+    fun tearDown() {
+        try {
+            transaction {
+                AuditLogsTable.deleteAll()
+            }
+        } catch (_: Exception) {}
+    }
+
+    @Test
+    fun `should find audit log by id`() {
+        auditRepository.save(
+            userId = 1,
+            action = "SNAPSHOT_CREATE",
+            resourceType = "CONFIGURATION_SNAPSHOT",
+            resourceId = 10,
+            details = "created"
+        )
+
+        val result = repository.search(
+            AuditLogQuery(
+                page = 0,
+                pageSize = 20
+            )
+        )
+
+        assertEquals(1, result.total)
+        assertEquals(1, result.items.size)
+
+        val id = result.items.first().id
+        val found = repository.findById(id)
+
+        assertNotNull(found)
+        assertEquals("SNAPSHOT_CREATE", found!!.action)
+    }
+
+    @Test
+    fun `should filter by user id`() {
+        auditRepository.save(1, "SNAPSHOT_CREATE", "CONFIGURATION_SNAPSHOT", 10, "user1")
+        auditRepository.save(2, "SNAPSHOT_CREATE", "CONFIGURATION_SNAPSHOT", 11, "user2")
+
+        val result = repository.search(AuditLogQuery(userId = 1))
+
+        assertEquals(1, result.total)
+        assertEquals(1, result.items.first().userId)
+    }
+
+    @Test
+    fun `should filter by action`() {
+        auditRepository.save(1, "SNAPSHOT_CREATE", "CONFIGURATION_SNAPSHOT", 10, null)
+        auditRepository.save(1, "SNAPSHOT_DELETE", "CONFIGURATION_SNAPSHOT", 10, null)
+
+        val result = repository.search(AuditLogQuery(action = "SNAPSHOT_DELETE"))
+
+        assertEquals(1, result.total)
+        assertEquals("SNAPSHOT_DELETE", result.items.first().action)
+    }
+
+    @Test
+    fun `should filter by resource`() {
+        auditRepository.save(1, "CONFIGURATION_MERGE", "CONFIGURATION_MERGE", 100, null)
+        auditRepository.save(1, "CONFIGURATION_MERGE", "CONFIGURATION_MERGE", 200, null)
+
+        val result = repository.search(
+            AuditLogQuery(
+                resourceType = "CONFIGURATION_MERGE",
+                resourceId = 200
+            )
+        )
+
+        assertEquals(1, result.total)
+        assertEquals(200, result.items.first().resourceId)
+    }
+
+    @Test
+    fun `should paginate results`() {
+        repeat(5) {
+            auditRepository.save(
+                userId = 1,
+                action = "TEST_$it",
+                resourceType = "TEST",
+                resourceId = it + 1,
+                details = null
+            )
+        }
+
+        val firstPage = repository.search(AuditLogQuery(page = 0, pageSize = 2))
+
+        assertEquals(5, firstPage.total)
+        assertEquals(2, firstPage.items.size)
+        assertEquals(0, firstPage.page)
+        assertEquals(2, firstPage.pageSize)
+        assertEquals(true, firstPage.hasNext)
+        assertEquals(false, firstPage.hasPrevious)
+
+        val secondPage = repository.search(AuditLogQuery(page = 1, pageSize = 2))
+
+        assertEquals(5, secondPage.total)
+        assertEquals(2, secondPage.items.size)
+        assertEquals(true, secondPage.hasNext)
+        assertEquals(true, secondPage.hasPrevious)
+    }
+
+    @Test
+    fun `should count filtered results`() {
+        auditRepository.save(1, "SNAPSHOT_CREATE", "CONFIGURATION_SNAPSHOT", 1, null)
+        auditRepository.save(1, "SNAPSHOT_CREATE", "CONFIGURATION_SNAPSHOT", 2, null)
+        auditRepository.save(2, "SNAPSHOT_DELETE", "CONFIGURATION_SNAPSHOT", 3, null)
+
+        val count = repository.count(AuditLogQuery(userId = 1))
+
+        assertEquals(2, count)
+    }
+}

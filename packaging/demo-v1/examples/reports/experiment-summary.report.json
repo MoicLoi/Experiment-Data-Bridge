@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "experiment-summary",
+  "version": 1,
+  "title": "Experiment Summary",
+  "generatorId": "tabular-summary",
+  "outputFormat": "PDF",
+  "outputFileName": "experiment-summary.pdf",
+  "defaultParameters": { "sampleRows": "10" }
+}

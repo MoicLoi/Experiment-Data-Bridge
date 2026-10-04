@@ -1,0 +1,93 @@
+package me.moiclathy.edb.core.database
+
+import me.moiclathy.edb.core.config.mapper.SnakeYamlProjectConfigMapper
+import me.moiclathy.edb.core.config.runtime.CachedConfigurationCenter
+import me.moiclathy.edb.core.config.runtime.ConfigRefreshService
+import me.moiclathy.edb.core.config.runtime.DatabaseProjectConfigLoader
+import me.moiclathy.edb.core.database.model.CreateProjectCommand
+import me.moiclathy.edb.core.database.model.Project
+import me.moiclathy.edb.core.database.repository.ProjectRepository
+import me.moiclathy.edb.core.project.ProjectMode
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
+
+class ConfigurationCenterTest {
+
+    @Test
+    fun refreshShouldReloadConfiguration() {
+        val repository = ProjectRepository()
+        val mapper = SnakeYamlProjectConfigMapper()
+        val loader = DatabaseProjectConfigLoader(repository, mapper)
+        val configurationCenter = CachedConfigurationCenter(loader)
+        val refreshService = ConfigRefreshService(configurationCenter)
+
+        // 0. 准备工作：在数据库中创建一个测试项目
+        val createCommand = CreateProjectCommand(
+            name = "Initial Name",
+            description = "Test Desc",
+            ownerId = 1,
+            mode = ProjectMode.PERSONAL,
+            configYaml = "version: 1"
+        )
+        val projectId = repository.create(
+            Project(
+                id = 0,
+                name = createCommand.name,
+                description = createCommand.description,
+                ownerId = createCommand.ownerId,
+                mode = createCommand.mode,
+                configYaml = createCommand.configYaml
+            )
+        )
+
+        try {
+            // 第一部分：取得第一次配置
+            val oldConfig = configurationCenter.get(projectId)
+
+            // 验证数据库里初始 yaml
+            Assertions.assertEquals(
+                repository.findConfigYaml(projectId),
+                "version: 1"
+            )
+
+            // 第二部分：直接修改数据库 (利用新增的测试辅助函数)
+            repository.updateConfigYaml(
+                projectId,
+                """version: 2
+project:
+  name: Reload Test"""
+            )
+
+            // 第三部分：刷新缓存
+            refreshService.refresh(projectId)
+
+            // 第四部分：重新读取
+            val newConfig = configurationCenter.get(projectId)
+
+            // 第五部分：验证
+            // 验证缓存对象已更新（不是同一个实例）
+            Assertions.assertNotSame(
+                oldConfig,
+                newConfig
+            )
+
+            // 验证版本号已变
+            Assertions.assertEquals(
+                2,
+                newConfig.version
+            )
+
+            // 验证名称已更新
+            Assertions.assertEquals(
+                "Reload Test",
+                newConfig.project.name
+            )
+
+        } finally {
+            // 清理测试数据，避免污染其他测试
+            try {
+                repository.delete(projectId)
+            } catch (_: Exception) {}
+        }
+    }
+}

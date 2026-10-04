@@ -1,0 +1,19 @@
+package me.moiclathy.edb.core.database
+
+
+import kotlin.test.Test
+
+
+class DatabaseMigrationTest {
+
+
+    @Test
+    fun testDatabasePackage(){
+
+        println(
+            "Database layer loaded"
+        )
+
+    }
+
+}

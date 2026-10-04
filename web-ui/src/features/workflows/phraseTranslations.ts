@@ -1,0 +1,4 @@
+export const phraseTranslations={
+ 'zh-CN':{title:'词条式自然语言编排',subtitle:'显示词条可翻译，提交值始终使用稳定的契约枚举。',add:'生成动作节点',contextHint:'文件来源通过上下文绑定；生成后仍由服务端 Schema 校验。',action:{execute:'执行'},capability:{convert:'文件转换',analysis:'使用算法库',step:'执行插件/步骤'},format:{csv:'转换到 CSV',json:'转换到 JSON',xlsx:'转换到 XLSX',hdf5:'转换到 HDF5',mat:'转换到 MAT'},parameters:{template:'按模板参数运行',custom:'按自定义参数运行'}},
+ 'en-US':{title:'Phrase workflow composer',subtitle:'Labels are translated while submitted values remain stable contract enums.',add:'Create action node',contextHint:'File sources are bound through context; server-side Schema validation still applies.',action:{execute:'Execute'},capability:{convert:'Convert file',analysis:'Use algorithm library',step:'Run plugin/step'},format:{csv:'Convert to CSV',json:'Convert to JSON',xlsx:'Convert to XLSX',hdf5:'Convert to HDF5',mat:'Convert to MAT'},parameters:{template:'Use template parameters',custom:'Use custom parameters'}},
+}as const

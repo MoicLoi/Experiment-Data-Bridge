@@ -1,0 +1,71 @@
+package me.moiclathy.edb.core.git
+
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
+
+class GitCommitServiceTest {
+
+    private lateinit var repositoryService: GitRepositoryService
+    private lateinit var commitService: GitCommitService
+
+    @BeforeEach
+    fun setUp() {
+        repositoryService = GitRepositoryService()
+        commitService = GitCommitService(repositoryService)
+    }
+
+    @Test
+    fun `test commit creates file and records single commit`(@TempDir tempDir: Path) {
+        val projectId = 1000
+        val yamlContent = "name: Mouse Study\nversion: 1.0"
+        val message = GitCommitMessages.configurationUpdated("Mouse Study")
+        val author = "TestUser"
+
+        // 1. 初始化仓库
+        repositoryService.initialize(projectId)
+
+        // 2. 执行 commit
+        val commitInfo = commitService.commit(projectId, yamlContent, message, author)
+        assertNotNull(commitInfo.commitId)
+
+        // 3. 检查 config.yaml 是否落盘存在
+        val configFile = GitPaths.configFile(projectId)
+        assertTrue(java.nio.file.Files.exists(configFile), "config.yaml should exist after commit")
+
+        // 4. 检查 Git 是否存在一次 Commit
+        repositoryService.open(projectId).use { git ->
+            val commits = git.log().setMaxCount(1).call()
+            val count = commits.count()
+            assertEquals(1, count, "Should have exactly 1 commit")
+        }
+    }
+
+    @Test
+    fun `test multiple commits log order and count`(@TempDir tempDir: Path) {
+        val projectId = 2000
+        val author = "TestUser"
+
+        repositoryService.initialize(projectId)
+
+        // 第一次提交
+        commitService.commit(projectId, "version: 1", "commit1", author)
+
+        // 第二次提交
+        commitService.commit(projectId, "version: 2", "commit2", author)
+
+        // 验证日志历史和数量
+        repositoryService.open(projectId).use { git ->
+            val commits = git.log().call().toList()
+
+            // 验证总数量为 2
+            assertEquals(2, commits.size, "Should have exactly 2 commits")
+
+            // 验证倒序（最新的是 commit2，排在最前面）
+            assertEquals("commit2", commits[0].fullMessage)
+            assertEquals("commit1", commits[1].fullMessage)
+        }
+    }
+}

@@ -1,0 +1,98 @@
+package me.moiclathy.edb.core.config.packages.zip
+
+import me.moiclathy.edb.core.config.packages.EdbManifest
+import me.moiclathy.edb.core.config.packages.EdbPackage
+import me.moiclathy.edb.core.config.packages.serializer.SnakeYamlManifestSerializer
+import me.moiclathy.edb.core.config.packages.serializer.SnakeYamlManifestDeserializer
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.time.Instant
+
+class ZipEdbPackageReaderTest {
+
+    @Test
+    fun `test zip writer and reader round trip property assertions`() {
+        // 1. 准备数据
+        val originalManifest = EdbManifest(
+            packageVersion = 1,
+            edbVersion = "0.22.3",
+            projectName = "RoundTrip Project",
+            projectId = 5,
+            author = "tester",
+            exportedAt = Instant.now()
+        )
+        val originalConfig = "config_key: config_value"
+        val original = EdbPackage(
+            manifest = originalManifest,
+            configuration = originalConfig
+        )
+
+        // 2. Writer 写入流
+        val outputStream = ByteArrayOutputStream()
+        val serializer = SnakeYamlManifestSerializer()
+        val writer = ZipEdbPackageWriter(serializer)
+        writer.write(original, outputStream)
+
+        val bytes = outputStream.toByteArray()
+
+        // 3. Reader 读取流 (使用独立的反序列化器)
+        val deserializer = SnakeYamlManifestDeserializer()
+        val reader = ZipEdbPackageReader(deserializer)
+        val restored = reader.read(ByteArrayInputStream(bytes))
+
+        // 4. 断言各项属性完全一致
+        Assertions.assertEquals(original.configuration.trim(), restored.configuration.trim())
+        Assertions.assertEquals(original.manifest.projectName, restored.manifest.projectName)
+        Assertions.assertEquals(original.manifest.projectId, restored.manifest.projectId)
+        Assertions.assertEquals(original.manifest.edbVersion, restored.manifest.edbVersion)
+        Assertions.assertEquals(original.manifest.author, restored.manifest.author)
+    }
+
+    @Test
+    fun shouldRejectMissingManifest() {
+        val bytes = createZipWithoutManifest()
+        val deserializer = SnakeYamlManifestDeserializer()
+        val reader = ZipEdbPackageReader(deserializer)
+
+        kotlin.test.assertFailsWith<IllegalStateException> {
+            reader.read(ByteArrayInputStream(bytes))
+        }
+    }
+
+    @Test
+    fun shouldRejectMissingConfiguration() {
+        val bytes = createZipWithoutConfiguration()
+        val deserializer = SnakeYamlManifestDeserializer()
+        val reader = ZipEdbPackageReader(deserializer)
+
+        kotlin.test.assertFailsWith<IllegalStateException> {
+            reader.read(ByteArrayInputStream(bytes))
+        }
+    }
+
+    // --- 辅助方法：构建缺少 manifest.yaml 的 ZIP 字节数组 ---
+    private fun createZipWithoutManifest(): ByteArray {
+        val outputStream = ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(outputStream).use { zipOut ->
+            // 只写入 configuration.yaml，不写 manifest.yaml
+            zipOut.putNextEntry(java.util.zip.ZipEntry("configuration.yaml"))
+            zipOut.write("config_key: value".toByteArray(Charsets.UTF_8))
+            zipOut.closeEntry()
+        }
+        return outputStream.toByteArray()
+    }
+
+    // --- 辅助方法：构建缺少 configuration.yaml 的 ZIP 字节数组 ---
+    private fun createZipWithoutConfiguration(): ByteArray {
+        val outputStream = ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(outputStream).use { zipOut ->
+            // 只写入 manifest.yaml，不写 configuration.yaml
+            zipOut.putNextEntry(java.util.zip.ZipEntry("manifest.yaml"))
+            zipOut.write("packageVersion: 1".toByteArray(Charsets.UTF_8))
+            zipOut.closeEntry()
+        }
+        return outputStream.toByteArray()
+    }
+}

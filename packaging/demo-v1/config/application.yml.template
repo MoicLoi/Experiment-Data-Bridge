@@ -1,0 +1,80 @@
+server:
+  host: 0.0.0.0
+  port: 25560
+database:
+  mysql:
+    host: __DB_HOST__
+    port: __DB_PORT__
+    database: __DB_NAME__
+    username: __DB_USER__
+    password: __DB_PASSWORD__
+pool:
+  maximum-pool-size: 10
+  minimum-idle: 2
+storage:
+  data-path: ./data
+  results-path: ./data/results
+  reports-path: ./data/reports
+  orphan-cleanup:
+    enabled: true
+    minimum-age-hours: 24
+    cleanup-interval-minutes: 360
+    max-deletes-per-run: 1000
+  retention:
+    enabled: true
+    retention-days: 90
+    cleanup-interval-minutes: 1440
+    batch-size: 500
+    max-batches-per-run: 10
+security:
+  jwt:
+    secret: __JWT_SECRET__
+    issuer: experiment-data-bridge
+    audience: edb-client
+    expires-in: 86400000
+initial-admin:
+  enabled: true
+  username: __ADMIN_USER__
+  password: __ADMIN_PASSWORD__
+  email: demo-admin@example.invalid
+  full-name: Demo Administrator
+plugins:
+  enabled: true
+  directory: ./plugins
+  fail-on-error: false
+agent:
+  model:
+    enabled: false
+    default-profile: fake-workflow-planner
+    fallback-to-fake: true
+    profiles: []
+    quota:
+      enabled: false
+      daily-user-tokens: 100000
+      daily-project-tokens: 1000000
+  retention:
+    enabled: false
+task:
+  workflow:
+    enabled: true
+    directory: ./config/workflows
+    template-directory: ./config/workflow-templates
+  report:
+    enabled: true
+    directory: ./config/reports
+    r-http:
+      enabled: false
+  analysis:
+    worker-mode: EXTERNAL
+    python-http:
+      enabled: false
+    external-http-handlers: []
+    docker-worker:
+      enabled: false
+    managed-docker-workers: []
+  retention:
+    enabled: false
+logging:
+  debug-mode: false
+  level:
+    root: INFO

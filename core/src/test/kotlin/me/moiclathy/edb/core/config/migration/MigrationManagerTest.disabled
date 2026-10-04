@@ -1,0 +1,40 @@
+package me.moiclathy.edb.core.config.migration
+
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+
+class MigrationManagerTest {
+
+    private val objectMapper = ObjectMapper(YAMLFactory())
+
+    @Test
+    fun `should migrate config from version 1 to version 2 successfully`() {
+        // 准备初始的 v1 版本 YAML 字符串
+        val initialYaml = """
+            version: 1
+            appName: "Experiment Data Bridge"
+            settings:
+              timeout: 30
+        """.trimIndent()
+
+        // 初始化 Manager，注入我们的 Dummy 迁移实现
+        val migrationManager = ConfigMigrationManager(
+            migrations = listOf(MigrationV1ToV2()),
+            objectMapper = objectMapper
+        )
+
+        // 执行迁移
+        val migratedYaml = migrationManager.migrate(initialYaml, version = 1)
+
+        // 验证结果：将迁移后的 YAML 重新解析为 Map 来断言版本号已更新
+        @Suppress("UNCHECKED_CAST")
+        val resultMap = objectMapper.readValue(migratedYaml, MutableMap::class.java) as MutableMap<String, Any?>
+
+        // 断言版本号已经从 1 变成了 2
+        assertEquals(2, resultMap["version"])
+        // 断言其他业务字段完好无损（证明没有遭到文本误伤）
+        assertEquals("Experiment Data Bridge", resultMap["appName"])
+    }
+}

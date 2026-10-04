@@ -1,0 +1,104 @@
+# ---------------------------------------------------------------------------
+# EDB repository ignore rules
+#
+# Rewritten during open-source hardening. Rule of thumb: build outputs, local
+# runtimes, machine-specific IDE state, and anything that can carry credentials
+# must never enter the repository.
+#
+# Note: `web/src/main/resources/application.yml` is the shipped default
+# configuration resource and MUST stay tracked. Only generated/runtime copies
+# of application.yml (release packages, local launcher output) are ignored.
+# ---------------------------------------------------------------------------
+
+# --- Gradle / Kotlin build output -----------------------------------------
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+.kotlin/
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# --- Local machine overrides ----------------------------------------------
+local.properties
+gradle.properties.local
+
+# --- Node / JavaScript toolchains -----------------------------------------
+node_modules/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+web-ui/.env.local
+web-ui/.env.*.local
+desktop/.env.local
+desktop/.env.*.local
+
+# --- Rust / Tauri ----------------------------------------------------------
+desktop/src-tauri/target/
+desktop/src-tauri/gen/schemas/
+desktop/src-tauri/gen/android/
+desktop/src-tauri/gen/apple/
+
+# --- Python worker ---------------------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# --- R worker --------------------------------------------------------------
+core/r-worker/.r-library/
+.Rhistory
+.RData
+.Rproj.user/
+
+# --- Runtime state written by the application ------------------------------
+# These directories hold real project data, uploaded files and logs; they are
+# machine/user specific and may contain credentials or personal data.
+core/logs/
+core/projects/
+core/.tmp/
+web/logs/
+web/projects/
+outputs/
+*.log
+*.pid
+.edb-demo.pid
+
+# --- Generated distributions and packages ----------------------------------
+release/
+packaging/demo-v1/config/application.yml
+
+# --- Local configuration and secrets ---------------------------------------
+# .env.example files are templates and stay tracked.
+.env
+.env.local
+.env.*.local
+*.jks
+*.p12
+*.keystore
+
+# --- IDE / editor machine state --------------------------------------------
+# Whole .idea/ is ignored: workspace.xml, dataSources.xml and
+# dataSources.local.xml carry per-developer state and database credentials.
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# --- Operating system ------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Local tooling caches --------------------------------------------------
+# GraphFlow writes a multi-megabyte graph cache into the workspace root.
+graphflow-out/
+.graphflow-cache/
+
+# --- Scratch files ---------------------------------------------------------
+run-error.txt
+test.yaml

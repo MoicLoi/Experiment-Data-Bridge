@@ -1,0 +1,176 @@
+package me.moiclathy.edb.web.routes
+
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.install
+import io.ktor.server.auth.Authentication
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.routing.routing
+import io.ktor.server.testing.testApplication
+import kotlinx.serialization.json.Json
+import me.moiclathy.edb.core.config.compare.service.ConfigurationCompareService
+import me.moiclathy.edb.core.config.snapshot.model.ConfigurationSnapshot
+import me.moiclathy.edb.core.config.snapshot.model.SnapshotMetadata
+import me.moiclathy.edb.core.config.snapshot.repository.ConfigurationSnapshotRepository
+import me.moiclathy.edb.web.routes.config.configurationCompareRoutes
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.koin.dsl.module
+import org.koin.ktor.plugin.Koin
+import java.time.Instant
+
+class ConfigurationCompareRouteTest {
+
+    private class Repository : ConfigurationSnapshotRepository {
+
+        private val data = mapOf(
+            1L to snapshot(
+                id = 1,
+                version = 1,
+                yaml = """
+                    server:
+                      port: 8080
+                """.trimIndent()
+            ),
+            2L to snapshot(
+                id = 2,
+                version = 2,
+                yaml = """
+                    server:
+                      port: 9090
+                """.trimIndent()
+            )
+        )
+
+        override fun save(snapshot: ConfigurationSnapshot): ConfigurationSnapshot = snapshot
+
+        override fun findById(id: Long): ConfigurationSnapshot? = data[id]
+
+        override fun findLatest(projectId: Int): ConfigurationSnapshot? =
+            data.values
+                .filter { it.projectId == projectId }
+                .maxByOrNull { it.version }
+
+        override fun findByProject(projectId: Int): List<ConfigurationSnapshot> =
+            data.values.filter { it.projectId == projectId }
+
+        override fun delete(id: Long) = Unit
+
+        override fun count(projectId: Int): Long =
+            data.values.count { it.projectId == projectId }.toLong()
+    }
+
+    private fun configureApplication(repository: ConfigurationSnapshotRepository) {
+        install(ContentNegotiation) {
+            json(
+                Json {
+                    ignoreUnknownKeys = true
+                }
+            )
+        }
+
+        install(Authentication) {
+            jwt("auth-jwt") {
+                verifier(
+                    com.auth0.jwt.JWT
+                        .require(com.auth0.jwt.algorithms.Algorithm.HMAC256("test"))
+                        .build()
+                )
+                validate { credential ->
+                    if (credential.payload.subject == "admin") {
+                        JWTPrincipal(credential.payload)
+                    } else {
+                        null
+                    }
+                }
+            }
+        }
+
+        install(Koin) {
+            modules(
+                module {
+                    single<ConfigurationSnapshotRepository> { repository }
+                    single<ConfigurationCompareService> {
+                        ConfigurationCompareService(repository = get())
+                    }
+                }
+            )
+        }
+
+        routing {
+            configurationCompareRoutes()
+        }
+    }
+
+    @Test
+    fun `compare endpoint should return changes`() = testApplication {
+        application {
+            configureApplication(Repository())
+        }
+
+        val response = client.get(
+            "/api/v1/projects/1/config/snapshots/compare" +
+                    "?sourceSnapshotId=1" +
+                    "&targetSnapshotId=2"
+        ) {
+            // 如果路由需要 Bearer Token，可以在这里顺手带上测试 Token
+            // bearerAuth("test-token")
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+
+        val body = response.bodyAsText()
+
+        assertEquals(true, body.contains("\"server.port\""))
+        assertEquals(true, body.contains("\"CHANGED\""))
+    }
+
+    @Test
+    fun `compare endpoint should reject missing snapshot ids`() = testApplication {
+        application {
+            configureApplication(Repository())
+        }
+
+        val response = client.get(
+            "/api/v1/projects/1/config/snapshots/compare"
+        )
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `compare endpoint should reject invalid project id`() = testApplication {
+        application {
+            configureApplication(Repository())
+        }
+
+        val response = client.get(
+            "/api/v1/projects/0/config/snapshots/compare" +
+                    "?sourceSnapshotId=1" +
+                    "&targetSnapshotId=2"
+        )
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+}
+
+private fun snapshot(
+    id: Long,
+    version: Int,
+    yaml: String
+): ConfigurationSnapshot {
+    return ConfigurationSnapshot(
+        id = id,
+        projectId = 1,
+        version = version,
+        metadata = SnapshotMetadata(
+            createdAt = Instant.now(),
+            createdBy = "test"
+        ),
+        yaml = yaml
+    )
+}

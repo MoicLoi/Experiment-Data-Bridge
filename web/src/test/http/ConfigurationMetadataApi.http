@@ -1,0 +1,55 @@
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODYyODQzMjgsImV4cCI6MTc4NjM3MDcyOH0.-P8FsNuLTQRjN8YtKOEX9oKYdfvQwellcrXlwD8y04M
+@baseUrl = localhost:25560
+
+
+### 1. 获取认证 Token (如果有登录接口的话，先换取 Token)
+# @name login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+
+
+
+### 2. 获取项目元数据 (GET)
+GET {{baseUrl}}/api/v1/projects/1/metadata
+Authorization: Bearer {{authToken}}
+
+
+### 3. 创建项目元数据 (POST)
+POST {{baseUrl}}/api/v1/projects/1/metadata
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "description": "Laboratory animal experiment",
+  "category": "animal",
+  "tags": ["animal", "experiment", "veterinary"],
+  "dataSource": "mysql"
+}
+
+
+### 4. 更新项目元数据 (PUT)
+PUT {{baseUrl}}/api/v1/projects/1/metadata
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "description": "Updated description",
+  "category": "updated",
+  "tags": ["animal", "updated"],
+  "dataSource": "yaml"
+}
+
+
+### 5. 删除项目元数据 (DELETE)
+DELETE {{baseUrl}}/api/v1/projects/1/metadata
+Authorization: Bearer {{authToken}}
+
+
+### 6. 测试未授权访问 (应返回 401 Unauthorized)
+GET {{baseUrl}}/api/v1/projects/1/metadata

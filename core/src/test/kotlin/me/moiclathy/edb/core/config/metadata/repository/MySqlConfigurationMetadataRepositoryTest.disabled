@@ -1,0 +1,294 @@
+package me.moiclathy.edb.core.config.metadata.repository
+
+import me.moiclathy.edb.core.config.metadata.model.ConfigurationMetadata
+import me.moiclathy.edb.core.database.table.ConfigurationMetadataTable
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import java.time.Instant
+
+/**
+ * MySqlConfigurationMetadataRepository 集成测试。
+ *
+ * 使用项目现有数据库测试环境。
+ */
+class MySqlConfigurationMetadataRepositoryTest {
+
+    private lateinit var repository:
+            MySqlConfigurationMetadataRepository
+
+    @BeforeEach
+    fun setUp() {
+
+        repository =
+            MySqlConfigurationMetadataRepository()
+
+        transaction {
+
+            SchemaUtils.create(
+                ConfigurationMetadataTable
+            )
+        }
+    }
+
+    @AfterEach
+    fun tearDown() {
+
+        transaction {
+
+            SchemaUtils.drop(
+                ConfigurationMetadataTable
+            )
+        }
+    }
+
+    private fun createMetadata(
+        projectId: Int = 1
+    ): ConfigurationMetadata {
+
+        return ConfigurationMetadata(
+
+            projectId = projectId,
+
+            description =
+                "Test configuration",
+
+            category =
+                "experiment",
+
+            tags =
+                listOf(
+                    "animal",
+                    "experiment",
+                    "veterinary"
+                ),
+
+            updatedAt =
+                Instant.now(),
+
+            dataSource =
+                "test"
+        )
+    }
+
+    @Test
+    fun `should save metadata`() {
+
+        val metadata =
+            createMetadata()
+
+        val result =
+            repository.save(metadata)
+
+        assertEquals(
+            metadata.projectId,
+            result.projectId
+        )
+
+        assertEquals(
+            metadata.description,
+            result.description
+        )
+
+        assertEquals(
+            metadata.category,
+            result.category
+        )
+
+        assertEquals(
+            metadata.tags,
+            result.tags
+        )
+
+        assertEquals(
+            metadata.dataSource,
+            result.dataSource
+        )
+    }
+
+    @Test
+    fun `should find metadata by project id`() {
+
+        repository.save(
+            createMetadata(1)
+        )
+
+        val result =
+            repository.findByProjectId(1)
+
+        assertNotNull(result)
+
+        assertEquals(
+            1,
+            result!!.projectId
+        )
+
+        assertEquals(
+            listOf(
+                "animal",
+                "experiment",
+                "veterinary"
+            ),
+            result.tags
+        )
+    }
+
+    @Test
+    fun `should return null when metadata does not exist`() {
+
+        val result =
+            repository.findByProjectId(999)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `should preserve null data source`() {
+
+        val metadata =
+            createMetadata().copy(
+                dataSource = null
+            )
+
+        repository.save(metadata)
+
+        val result =
+            repository.findByProjectId(
+                metadata.projectId
+            )
+
+        assertNotNull(result)
+
+        assertNull(
+            result!!.dataSource
+        )
+    }
+
+    @Test
+    fun `should update metadata`() {
+
+        repository.save(
+            createMetadata()
+        )
+
+        val updated =
+            createMetadata().copy(
+                description =
+                    "Updated configuration",
+
+                category =
+                    "updated",
+
+                tags =
+                    listOf(
+                        "updated",
+                        "metadata"
+                    ),
+
+                dataSource =
+                    "database"
+            )
+
+        val result =
+            repository.update(updated)
+
+        assertEquals(
+            "Updated configuration",
+            result.description
+        )
+
+        assertEquals(
+            "updated",
+            result.category
+        )
+
+        assertEquals(
+            listOf(
+                "updated",
+                "metadata"
+            ),
+            result.tags
+        )
+
+        assertEquals(
+            "database",
+            result.dataSource
+        )
+    }
+
+    @Test
+    fun `should report metadata exists`() {
+
+        repository.save(
+            createMetadata()
+        )
+
+        assertTrue(
+            repository.exists(1)
+        )
+
+        assertFalse(
+            repository.exists(999)
+        )
+    }
+
+    @Test
+    fun `should delete metadata`() {
+
+        repository.save(
+            createMetadata()
+        )
+
+        assertTrue(
+            repository.exists(1)
+        )
+
+        repository.delete(1)
+
+        assertFalse(
+            repository.exists(1)
+        )
+
+        assertNull(
+            repository.findByProjectId(1)
+        )
+    }
+
+    @Test
+    fun `should find all metadata`() {
+
+        repository.save(
+            createMetadata(1)
+        )
+
+        repository.save(
+            createMetadata(2)
+        )
+
+        repository.save(
+            createMetadata(3)
+        )
+
+        val result =
+            repository.findAll()
+
+        assertEquals(
+            3,
+            result.size
+        )
+
+        assertEquals(
+            setOf(1, 2, 3),
+            result
+                .map { it.projectId }
+                .toSet()
+        )
+    }
+}

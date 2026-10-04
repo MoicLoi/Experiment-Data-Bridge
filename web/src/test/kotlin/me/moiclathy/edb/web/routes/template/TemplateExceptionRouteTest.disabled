@@ -1,0 +1,177 @@
+package me.moiclathy.edb.web.routes.template
+
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
+import com.fasterxml.jackson.databind.ObjectMapper
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.serialization.jackson.jackson
+import io.ktor.server.application.Application
+import io.ktor.server.application.install
+import io.ktor.server.auth.Authentication
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.response.respond
+import io.ktor.server.routing.routing
+import io.ktor.server.testing.testApplication
+import io.mockk.every
+import io.mockk.mockk
+import me.moiclathy.edb.core.exception.EDBException
+import me.moiclathy.edb.core.template.service.TemplateService
+import me.moiclathy.edb.web.dto.ErrorResponse
+import me.moiclathy.edb.web.exception.ExceptionStatusMapper
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.koin.dsl.module
+import org.koin.ktor.plugin.Koin
+
+
+class TemplateExceptionRouteTest {
+
+    private val templateService =
+        mockk<TemplateService>()
+
+    private val objectMapper = ObjectMapper()
+
+    private fun Application.configureTestModule() {
+
+        install(ContentNegotiation) {
+            jackson()
+        }
+
+        install(StatusPages) {
+
+            exception<EDBException> { call, cause ->
+
+                call.respond(
+                    ExceptionStatusMapper.status(cause),
+                    ErrorResponse(
+                        code = cause.code,
+                        message = cause.message
+                    )
+                )
+            }
+
+            exception<Throwable> { call, _ ->
+
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse(
+                        code = "INTERNAL_ERROR",
+                        message = "Internal server error"
+                    )
+                )
+            }
+        }
+
+        install(Authentication) {
+
+            provider("auth-jwt") {
+
+                authenticate { context ->
+
+                    val token =
+                        JWT.create()
+                            .withSubject("admin")
+                            .sign(
+                                Algorithm.HMAC256("test")
+                            )
+
+                    val payload =
+                        JWT.decode(token)
+
+                    context.principal(
+                        JWTPrincipal(payload)
+                    )
+                }
+            }
+        }
+
+        install(Koin) {
+
+            modules(
+                module {
+                    single {
+                        templateService
+                    }
+                }
+            )
+        }
+
+        routing {
+
+            templateRoutes()
+        }
+    }
+
+    @Test
+    fun `get nonexistent template should return 404`() =
+        testApplication {
+
+            application {
+                configureTestModule()
+            }
+
+            every {
+                templateService.load(999L)
+            } throws
+                    EDBException(
+                        code = "TEMPLATE_NOT_FOUND",
+                        message = "Template not found: 999"
+                    )
+
+            val response =
+                client.get(
+                    "/api/v1/templates/999"
+                ) {
+                    contentType(
+                        ContentType.Application.Json
+                    )
+                }
+
+            assertEquals(
+                HttpStatusCode.NotFound,
+                response.status
+            )
+
+            val body = response.bodyAsText()
+            assert(body.contains("TEMPLATE_NOT_FOUND"))
+            assert(body.contains("Template not found: 999"))
+        }
+
+    @Test
+    fun `service validation exception should return 400`() =
+        testApplication {
+
+            application {
+                configureTestModule()
+            }
+
+            every {
+                templateService.load(1L)
+            } throws
+                    EDBException(
+                        code = "TEMPLATE_VALIDATION_FAILED",
+                        message = "Template is invalid"
+                    )
+
+            val response =
+                client.get(
+                    "/api/v1/templates/1"
+                )
+
+            assertEquals(
+                HttpStatusCode.BadRequest,
+                response.status
+            )
+
+            val body = response.bodyAsText()
+            assert(body.contains("TEMPLATE_VALIDATION_FAILED"))
+            assert(body.contains("Template is invalid"))
+        }
+}

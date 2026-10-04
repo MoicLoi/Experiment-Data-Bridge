@@ -1,0 +1,37 @@
+task:
+  analysis:
+    # The legacy single docker-worker is omitted because both members are
+    # declared explicitly below.
+    worker-mode: EXTERNAL
+    external-http-handlers:
+      - enabled: true
+        handler-id: r-statistical-summary
+        analysis-type: statistics
+        tool: r-http
+        endpoint: http://127.0.0.1:8001/analyze
+        output-format: JSON
+        bearer-token: replace-me
+    managed-docker-workers:
+      - id: python
+        enabled: true
+        image: edb/python-worker:dev
+        worker-kind: python-http
+        container-name: edb-python-worker
+        host-port: 8000
+        container-port: 8000
+        bearer-token: replace-me
+      - id: r
+        enabled: true
+        image: edb/r-worker:dev
+        worker-kind: r-http
+        container-name: edb-r-worker
+        host-port: 8001
+        container-port: 8001
+        bearer-token: replace-me
+  report:
+    r-http:
+      enabled: true
+      generator-id: r-tabular-summary-report
+      endpoint: http://127.0.0.1:8001/analyze
+      output-formats: [PDF]
+      bearer-token: replace-me

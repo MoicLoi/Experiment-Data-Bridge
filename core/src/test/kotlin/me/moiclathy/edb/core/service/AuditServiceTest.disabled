@@ -1,0 +1,123 @@
+package me.moiclathy.edb.core.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.audit.model.AuditLogPage
+import me.moiclathy.edb.core.audit.model.AuditLogQuery
+import me.moiclathy.edb.core.audit.repository.AuditLogRepository
+import me.moiclathy.edb.core.database.model.AuditLog
+import me.moiclathy.edb.core.database.repository.AuditRepository
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Test
+import java.time.Instant
+
+class AuditServiceTest {
+
+    private val auditRepository =
+        mockk<AuditRepository>(relaxed = true)
+
+    private val auditLogRepository =
+        mockk<AuditLogRepository>()
+
+    private val service =
+        AuditService(
+            auditRepository,
+            auditLogRepository
+        )
+
+    @Test
+    fun `should search audit logs`() {
+
+        val logs =
+            listOf(
+                sampleAudit(1L),
+                sampleAudit(2L)
+            )
+
+        // 因为 repository.search 直接返回 AuditLogPage，这里需要构造并返回 Page 对象
+        val auditPage = AuditLogPage(
+            items = logs,
+            total = 2L,
+            page = 0,
+            pageSize = 20,
+        )
+
+        every {
+            auditLogRepository.search(any())
+        } returns auditPage
+
+        val result =
+            service.search(
+                AuditLogQuery()
+            )
+
+        assertEquals(2, result.items.size)
+        assertEquals(2L, result.total)
+
+        verify(exactly = 1) {
+            auditLogRepository.search(any())
+        }
+    }
+
+    @Test
+    fun `should get audit log`() {
+
+        val audit =
+            sampleAudit(1L)
+
+        every {
+            auditLogRepository.findById(1L)
+        } returns audit
+
+        val result =
+            service.get(1L)
+
+        assertEquals(audit, result)
+
+        verify(exactly = 1) {
+            auditLogRepository.findById(1L)
+        }
+    }
+
+    @Test
+    fun `should return null when audit log does not exist`() {
+
+        every {
+            auditLogRepository.findById(999L)
+        } returns null
+
+        val result =
+            service.get(999L)
+
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `should reject invalid audit id`() {
+
+        assertThrows(
+            IllegalArgumentException::class.java
+        ) {
+            service.get(0L)
+        }
+    }
+
+    private fun sampleAudit(
+        id: Long
+    ): AuditLog {
+
+        return AuditLog(
+            id = id,
+            userId = 1,
+            action = "TEST",
+            resourceType = "PROJECT",
+            resourceId = 10,
+            details = "test",
+            createdAt = Instant.parse(
+                "2026-08-09T10:00:00Z"
+            )
+        )
+    }
+}

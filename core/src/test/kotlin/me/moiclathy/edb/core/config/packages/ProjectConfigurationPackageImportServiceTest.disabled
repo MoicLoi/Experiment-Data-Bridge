@@ -1,0 +1,69 @@
+package me.moiclathy.edb.core.config.packages
+
+import io.mockk.mockk
+import me.moiclathy.edb.core.config.packages.serializer.SnakeYamlManifestSerializer
+import me.moiclathy.edb.core.config.packages.serializer.SnakeYamlManifestDeserializer
+import me.moiclathy.edb.core.config.packages.validation.PackageManifestValidator
+import me.moiclathy.edb.core.config.packages.zip.ZipEdbPackageWriter
+import me.moiclathy.edb.core.config.packages.zip.ZipEdbPackageReader
+import me.moiclathy.edb.core.service.ProjectConfigurationPackageImportService
+import me.moiclathy.edb.core.service.ProjectConfigurationService
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.time.Instant
+
+class ProjectConfigurationPackageImportServiceTest {
+
+    @Test
+    fun `test import package should return git commit info successfully`() {
+        // 1. 准备原始测试数据
+        val originalManifest = EdbManifest(
+            packageVersion = 1,
+            edbVersion = "0.22.3",
+            projectName = "Test Project",
+            projectId = 2,
+            author = "admin",
+            exportedAt = Instant.now()
+        )
+        val originalConfig = "version: 1\nsettings:\n  enabled: true"
+        val originalPackage = EdbPackage(
+            manifest = originalManifest,
+            configuration = originalConfig
+        )
+
+        // 2. 通过 Writer 生成包的字节数组 (模拟导出的 .edb 文件)
+        val outputStream = ByteArrayOutputStream()
+        val serializer = SnakeYamlManifestSerializer()
+        val writer = ZipEdbPackageWriter(serializer)
+        writer.write(originalPackage, outputStream)
+        val packageBytes = outputStream.toByteArray()
+
+        // 3. 准备 Mock 的 configurationService (使用 MockK)
+        val configurationService = mockk<ProjectConfigurationService>(relaxed = true)
+
+        // 4. 组装待测试的导入服务
+        val deserializer = SnakeYamlManifestDeserializer()
+        val reader = ZipEdbPackageReader(deserializer)
+        val importer = EdbPackageImporter(reader)
+        val validator = PackageManifestValidator()
+        val importService = ProjectConfigurationPackageImportService(
+            packageImporter = importer,
+            configurationService = configurationService,
+            validator = validator
+        )
+
+        // 5. 执行导入
+        val inputStream = ByteArrayInputStream(packageBytes)
+        val result = importService.importPackage(
+            projectId = 2,
+            userId = 100,
+            input = inputStream,
+            author = "admin"
+        )
+
+        // 6. 验证结果
+        assertNotNull(result)
+    }
+}

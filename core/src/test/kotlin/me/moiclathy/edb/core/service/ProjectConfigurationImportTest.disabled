@@ -1,0 +1,155 @@
+package me.moiclathy.edb.core.service
+
+import com.google.common.base.CharMatcher.any
+import io.mockk.every
+import io.mockk.mockk
+import me.moiclathy.edb.core.config.migration.ConfigMigrationManager
+import me.moiclathy.edb.core.config.migration.ConfigVersionReader
+import me.moiclathy.edb.core.config.schema.ConfigSchemaValidator
+import me.moiclathy.edb.core.git.GitCommitInfo
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
+import java.time.Instant
+
+class ProjectConfigurationImportTest {
+    /*@Test
+    fun shouldImportWithCustomImportMessage() {
+        val reader = mockk<ConfigVersionReader>()
+        val migration = mockk<ConfigMigrationManager>()
+        val saveService = mockk<ProjectConfigurationService>()
+        val validator = mockk<ConfigSchemaValidator>(relaxed = true) // 新增：补全校验器
+
+        every { reader.readVersion(any()) } returns 1
+        every { migration.migrate(any(), any()) } answers { firstArg() }
+
+        val commit =
+            GitCommitInfo(
+                commitId = "abc",
+                shortCommitId = "abc",
+                message = "Import configuration into Demo",
+                author = "admin",
+                time = Instant.now(),
+                email = "admin@edb.local"
+            )
+
+        // 验证 saveService 是否被传入了期望的导入消息生成策略
+        every {
+            saveService.saveConfiguration(
+                eq(1),
+                eq(1),
+                any(),
+                eq("admin"),
+                any()
+            )
+        } answers {
+            val messageBuilder = arg<(String) -> String>(4)
+            val generatedMessage = messageBuilder("Demo")
+            assertEquals("Import configuration into Demo", generatedMessage)
+            commit
+        }
+
+        val service =
+            ProjectConfigurationImportService(
+                versionReader = reader,
+                validator = validator,
+                migrationManager = migration, // 根据实际参数名调整
+                configurationService = saveService
+            )
+
+        val result =
+            service.importConfiguration(
+                projectId = 1,
+                userId = 1,
+                yaml = "version: 1",
+                author = "admin"
+            )
+
+    }*/
+
+
+
+    @Test
+    fun shouldApplyMigrationWhenVersionIsOlder() {
+        val reader = mockk<ConfigVersionReader>()
+        val validator = mockk<ConfigSchemaValidator>(relaxed = true)
+        val migration = mockk<ConfigMigrationManager>()
+        val saveService = mockk<ProjectConfigurationService>()
+
+        // 模拟输入的是 V1 版本
+        every { reader.readVersion(any()) } returns 0
+        // 模拟迁移成功，升级到 V2
+        every { migration.migrate(any(), 0) } returns "version: 2\ndata: migrated"
+
+        val commit = GitCommitInfo(
+            commitId = "abc",
+            shortCommitId = "abc",
+            message = "Import configuration into Demo",
+            author = "admin",
+            time = Instant.now(),
+            email = "admin@edb.local"
+        )
+
+        every { saveService.saveConfiguration(any(), any(), any(), any(), any()) } returns commit
+
+        val service = ProjectConfigurationImportService(
+            validator = validator,
+            migrationManager = migration,
+            configurationService = saveService,
+            versionReader = reader
+        )
+
+        val report = service.importConfiguration(
+            projectId = 1,
+            userId = 1,
+            yaml = "version: 1",
+            author = "admin"
+        )
+
+        assertTrue(report.migrationApplied)
+        assertEquals(0, report.originalVersion)
+        assertEquals(1, report.migratedVersion) // 假设当前最新版本是 2 (ConfigSchema.CURRENT_VERSION)
+    }
+
+    @Test
+    fun shouldNotApplyMigrationWhenVersionIsUpToDate() {
+        val reader = mockk<ConfigVersionReader>()
+        val validator = mockk<ConfigSchemaValidator>(relaxed = true)
+        val migration = mockk<ConfigMigrationManager>()
+        val saveService = mockk<ProjectConfigurationService>()
+
+        // 模拟输入的是当前最新版本（例如 V2，根据你的 ConfigSchema.CURRENT_VERSION 调整）
+        every { reader.readVersion(any()) } returns 1
+        // 不需要执行迁移，migration.migrate 不会被调用
+
+        val commit = GitCommitInfo(
+            commitId = "def",
+            shortCommitId = "def",
+            message = "Import configuration into Demo",
+            author = "admin",
+            time = Instant.now(),
+            email = "admin@edb.local"
+        )
+
+        every { saveService.saveConfiguration(any(), any(), any(), any(), any()) } returns commit
+
+        val service = ProjectConfigurationImportService(
+            validator = validator,
+            migrationManager = migration,
+            configurationService = saveService,
+            versionReader = reader
+        )
+
+        val report = service.importConfiguration(
+            projectId = 1,
+            userId = 1,
+            yaml = "version: 2",
+            author = "admin"
+        )
+
+        assertFalse(report.migrationApplied)
+        assertEquals(1, report.originalVersion)
+        assertEquals(1, report.migratedVersion)
+    }
+}

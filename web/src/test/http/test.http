@@ -1,0 +1,125 @@
+GET http://127.0.0.1:25560/api/v1/user/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJBRE1JTiIsImlzcyI6ImV4cGVyaW1lbnQtZGF0YS1icmlkZ2UiLCJhdWQiOiJlZGItY2xpZW50IiwiaWF0IjoxNzg1NzY2NDkwLCJleHAiOjE3ODU4NTI4OTB9.OG5uppG3LoorkrPoTfk4PR-3b0r5cOW4bdhW8GF63p0
+
+### 1. 登录获取 Token (Admin)
+# @name adminLogin
+POST http://localhost:25560/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+> {%
+    client.global.set("adminToken", response.body.token);
+    client.global.set("adminId", response.body.userId);
+%}
+
+
+### 2. 创建项目（触发 CREATE_PROJECT 审计日志）
+POST http://localhost:25560/api/v1/projects
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODU4NDU0NzgsImV4cCI6MTc4NTkzMTg3OH0.vjdb-gZLYGUtav9oMo39dt1wvOxNvE6fs4Bo-CWxQG0
+
+{
+  "name": "Audit Test Project",
+  "description": "Testing the audit logging mechanism",
+  "mode": "PERSONAL"
+}
+
+> {%
+    // 自动捕获新创建项目的 ID，方便下一步删除使用
+    client.global.set("project_id", response.body.id);
+    console.log("Created Project ID: " + response.body.id);
+%}
+
+### ---
+
+### 3. 删除项目（触发 DELETE_PROJECT 审计日志）
+# 会自动使用上一步创建成功的项目 ID
+DELETE http://localhost:25560/api/v1/projects/{{project_id}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODU4NDU0NzgsImV4cCI6MTc4NTkzMTg3OH0.vjdb-gZLYGUtav9oMo39dt1wvOxNvE6fs4Bo-CWxQG0
+
+
+### 2. 登录获取 Token (User1)
+# @name user1Login
+POST http://localhost:25560/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "user1",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("user1Token", response.body.token);
+    client.global.set("user1Id", response.body.userId);
+%}
+
+
+
+### 3. POST /api/v1/projects - Admin 创建项目 A
+POST http://localhost:25560/api/v1/projects
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODU4MzIyODUsImV4cCI6MTc4NTkxODY4NX0.kuG_RO-7sEOVMkghAK3d-MCwJnSR29I-KdaWbm4gV2c
+Content-Type: application/json
+
+{
+  "name": "Project A",
+  "description": "Admin's first project",
+  "mode": "COLLABORATIVE",
+  "configYaml": "version: 1"
+}
+
+
+### 4. POST /api/v1/projects - User1 创建项目 B
+POST http://localhost:25560/api/v1/projects
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMSIsInVzZXJJZCI6Miwicm9sZSI6Ik1FTUJFUiIsImlzcyI6ImV4cGVyaW1lbnQtZGF0YS1icmlkZ2UiLCJhdWQiOiJlZGItY2xpZW50IiwiaWF0IjoxNzg1ODMyMjk0LCJleHAiOjE3ODU5MTg2OTR9.qWueFKsfeL71TNhHCj3VRftQ0W1UZ6cgaa3UyF0kGes
+Content-Type: application/json
+
+{
+  "name": "Project B",
+  "description": "User1's first project",
+  "mode": "COLLABORATIVE",
+  "configYaml": "version: 1"
+}
+
+
+
+### 5. GET /api/v1/projects - Admin 获取项目列表 (应只能看到 Project A)(user)
+GET http://localhost:25560/api/v1/projects/2
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODU4Mzc4ODUsImV4cCI6MTc4NTkyNDI4NX0.qXzEWiGHU5ZfJUqvTNaG_y90ywiNdslEDTtWbocWh-c
+
+### 5. GET /api/v1/projects - Admin 获取项目列表 (应只能看到 Project A)(admin)
+GET http://localhost:25560/api/v1/projects/2
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMSIsInVzZXJJZCI6Miwicm9sZSI6Ik1FTUJFUiIsImlzcyI6ImV4cGVyaW1lbnQtZGF0YS1icmlkZ2UiLCJhdWQiOiJlZGItY2xpZW50IiwiaWF0IjoxNzg1ODMyMjk0LCJleHAiOjE3ODU5MTg2OTR9.qWueFKsfeL71TNhHCj3VRftQ0W1UZ6cgaa3UyF0kGes
+
+
+### 6. GET /api/v1/projects/{id} - 获取单个项目详情 (假设ID为1)
+GET http://localhost:25560/api/v1/projects/2
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMSIsInVzZXJJZCI6Miwicm9sZSI6Ik1FTUJFUiIsImlzcyI6ImV4cGVyaW1lbnQtZGF0YS1icmlkZ2UiLCJhdWQiOiJlZGItY2xpZW50IiwiaWF0IjoxNzg1ODMyMjk0LCJleHAiOjE3ODU5MTg2OTR9.qWueFKsfeL71TNhHCj3VRftQ0W1UZ6cgaa3UyF0kGes
+
+
+
+### 7. PUT /api/v1/projects/{id} - 更新项目 (假设ID为1)
+PUT http://localhost:25560/api/v1/projects/1
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODU4MzIyODUsImV4cCI6MTc4NTkxODY4NX0.kuG_RO-7sEOVMkghAK3d-MCwJnSR29I-KdaWbm4gV2c
+Content-Type: application/json
+
+{
+  "name": "Project A Updated",
+  "description": "Updated description",
+  "mode": "COLLABORATIVE",
+  "configYaml": "version: 2"
+}
+
+
+
+### 8. DELETE /api/v1/projects/{id} - 删除项目 (假设ID为1)
+DELETE http://localhost:25560/api/v1/projects/1
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODU4MzIyODUsImV4cCI6MTc4NTkxODY4NX0.kuG_RO-7sEOVMkghAK3d-MCwJnSR29I-KdaWbm4gV2c
+
+
+###
+GET http://localhost:25560/api/v1/projects/1
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODU4MzIyODUsImV4cCI6MTc4NTkxODY4NX0.kuG_RO-7sEOVMkghAK3d-MCwJnSR29I-KdaWbm4gV2c

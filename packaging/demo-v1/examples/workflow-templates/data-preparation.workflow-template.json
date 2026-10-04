@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "data-preparation",
+  "version": "1.0.0",
+  "title": "Data preparation",
+  "description": "Convert an uploaded tabular DataFile to CSV and expose the derived file id.",
+  "category": "data",
+  "tags": ["datafile", "conversion", "runnable"],
+  "workflow": {
+    "schemaVersion": 1,
+    "id": "data-preparation-workflow",
+    "version": "1.0.0",
+    "description": "DataFile conversion starter.",
+    "inputs": [{"name": "sourceDataFileId", "contextKey": "sourceDataFileId", "required": true, "description": "Uploaded source DataFile id"}],
+    "outputs": [{"name": "convertedDataFileId", "contextKey": "convertedDataFileId", "required": true}],
+    "steps": [
+      {
+        "id": "convert-to-csv", "type": "datafile.convert", "version": "1", "order": 0,
+        "dependsOn": [],
+        "parameters": {"targetFormat": "CSV", "sourceDataFileIdContext": "sourceDataFileId", "resultContextKey": "convertedDataFileId"},
+        "contextBindings": [], "outputBindings": [],
+        "policy": {"timeoutMs": 300000, "retry": {"maxAttempts": 1, "initialDelayMs": 1000, "backoffMultiplier": 2.0, "maxDelayMs": 60000}, "failureStrategy": "STOP_WORKFLOW"}
+      }
+    ]
+  }
+}

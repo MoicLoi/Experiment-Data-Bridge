@@ -1,0 +1,7 @@
+.r-library
+tests
+.gitignore
+README.md
+compose.yaml
+application-managed.example.yml
+application-fleet.example.yml

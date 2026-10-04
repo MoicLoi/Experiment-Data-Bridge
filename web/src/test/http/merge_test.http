@@ -1,0 +1,40 @@
+@auth_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODYyMTEwMTksImV4cCI6MTc4NjI5NzQxOX0.-PXNB2oUdT4bZKGz8KVxWEs7Eq52Gy-ceDDg1OSxes0
+
+
+
+### 1. 成功合并配置快照
+POST http://localhost:25560/api/v1/projects/100/config/merge
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "targetSnapshotId": 1,
+  "sourceSnapshotId": 2,
+  "strategy": "FAIL_ON_CONFLICT"
+}
+
+
+
+### 2. 测试项目 ID 不匹配 (预期 404 或 400)
+POST http://localhost:25560/api/v1/projects/999/config/merge
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "targetSnapshotId": 1,
+  "sourceSnapshotId": 2,
+  "strategy": "FAIL_ON_CONFLICT"
+}
+
+
+
+### 3. 测试错误参数/无效 ID (预期 400)
+POST http://localhost:25560/api/v1/projects/0/config/merge
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "targetSnapshotId": 0,
+  "sourceSnapshotId": 2,
+  "strategy": "FAIL_ON_CONFLICT"
+}

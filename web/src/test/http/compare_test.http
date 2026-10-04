@@ -1,0 +1,48 @@
+@auth_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODYyMTEwMTksImV4cCI6MTc4NjI5NzQxOX0.-PXNB2oUdT4bZKGz8KVxWEs7Eq52Gy-ceDDg1OSxes0
+
+
+
+
+###
+POST http://localhost:25560/api/v1/projects/1/config/snapshots
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "yaml": "server:\n  port: 8080",
+  "description": "v1 initial config"
+}
+
+###
+
+POST http://localhost:25560/api/v1/projects/1/config/snapshots
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "yaml": "server:\n  port: 9090",
+  "description": "v2 changed port"
+}
+
+
+
+
+
+
+### 1. 成功对比两个配置快照 (预期 200 OK，返回结构化差异)
+GET http://localhost:25560/api/v1/projects/1/config/snapshots/compare?sourceSnapshotId=1&targetSnapshotId=2
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+
+### 2. 测试缺少 sourceSnapshotId 或 targetSnapshotId 参数 (预期 400 Bad Request)
+GET http://localhost:25560/api/v1/projects/1/config/snapshots/compare
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+
+
+### 3. 测试非法的项目 ID (预期 400 Bad Request)
+GET http://localhost:25560/api/v1/projects/0/config/snapshots/compare?sourceSnapshotId=1&targetSnapshotId=2
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json

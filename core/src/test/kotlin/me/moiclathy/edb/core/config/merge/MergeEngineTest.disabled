@@ -1,0 +1,275 @@
+package me.moiclathy.edb.core.config.merge
+
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+
+class MergeEngineTest {
+
+    private val engine = MergeEngine()
+
+    @Test
+    fun `should merge non conflicting values`() {
+
+        val result = engine.merge(
+            MergeRequest(
+                target = mapOf(
+                    "name" to "edb"
+                ),
+                source = mapOf(
+                    "version" to 1
+                )
+            )
+        )
+
+        assertFalse(result.hasConflicts)
+
+        assertEquals(
+            mapOf(
+                "name" to "edb",
+                "version" to 1
+            ),
+            result.merged
+        )
+    }
+
+    @Test
+    fun `should recursively merge nested maps`() {
+
+        val result = engine.merge(
+            MergeRequest(
+                target = mapOf(
+                    "database" to mapOf(
+                        "host" to "localhost",
+                        "port" to 3306
+                    )
+                ),
+                source = mapOf(
+                    "database" to mapOf(
+                        "username" to "root"
+                    )
+                )
+            )
+        )
+
+        assertFalse(result.hasConflicts)
+
+        val database =
+            result.merged["database"] as Map<*, *>
+
+        assertEquals(
+            "localhost",
+            database["host"]
+        )
+
+        assertEquals(
+            3306,
+            database["port"]
+        )
+
+        assertEquals(
+            "root",
+            database["username"]
+        )
+    }
+
+    @Test
+    fun `should detect scalar conflict`() {
+
+        val result = engine.merge(
+            MergeRequest(
+                target = mapOf(
+                    "database" to mapOf(
+                        "host" to "localhost"
+                    )
+                ),
+                source = mapOf(
+                    "database" to mapOf(
+                        "host" to "production"
+                    )
+                )
+            )
+        )
+
+        assertTrue(result.hasConflicts)
+
+        assertEquals(
+            1,
+            result.conflicts.size
+        )
+
+        assertEquals(
+            "database.host",
+            result.conflicts.first().path
+        )
+
+        assertEquals(
+            MergeConflictType.VALUE_CONFLICT,
+            result.conflicts.first().type
+        )
+    }
+
+    @Test
+    fun `source wins should override conflicting value`() {
+
+        val result = engine.merge(
+            MergeRequest(
+                target = mapOf(
+                    "name" to "old"
+                ),
+                source = mapOf(
+                    "name" to "new"
+                ),
+                strategy = MergeStrategy.SOURCE_WINS
+            )
+        )
+
+        assertEquals(
+            "new",
+            result.merged["name"]
+        )
+
+        assertTrue(result.hasConflicts)
+    }
+
+    @Test
+    fun `target wins should preserve conflicting value`() {
+
+        val result = engine.merge(
+            MergeRequest(
+                target = mapOf(
+                    "name" to "old"
+                ),
+                source = mapOf(
+                    "name" to "new"
+                ),
+                strategy = MergeStrategy.TARGET_WINS
+            )
+        )
+
+        assertEquals(
+            "old",
+            result.merged["name"]
+        )
+
+        assertTrue(result.hasConflicts)
+    }
+
+    @Test
+    fun `equal values should not create conflict`() {
+
+        val result = engine.merge(
+            MergeRequest(
+                target = mapOf(
+                    "name" to "edb"
+                ),
+                source = mapOf(
+                    "name" to "edb"
+                )
+            )
+        )
+
+        assertFalse(result.hasConflicts)
+
+        assertEquals(
+            "edb",
+            result.merged["name"]
+        )
+    }
+
+    @Test
+    fun `should detect list conflict`() {
+
+        val result = engine.merge(
+            MergeRequest(
+                target = mapOf(
+                    "items" to listOf("a", "b")
+                ),
+                source = mapOf(
+                    "items" to listOf("c")
+                )
+            )
+        )
+
+        assertTrue(result.hasConflicts)
+
+        assertEquals(
+            MergeConflictType.LIST_CONFLICT,
+            result.conflicts.first().type
+        )
+    }
+
+    @Test
+    fun `should detect type mismatch`() {
+
+        val result = engine.merge(
+            MergeRequest(
+                target = mapOf(
+                    "port" to 3306
+                ),
+                source = mapOf(
+                    "port" to "3306"
+                )
+            )
+        )
+
+        assertTrue(result.hasConflicts)
+
+        assertEquals(
+            MergeConflictType.TYPE_MISMATCH,
+            result.conflicts.first().type
+        )
+    }
+
+    @Test
+    fun `should preserve target with recursive strategy`() {
+
+        val result = engine.merge(
+            MergeRequest(
+                target = mapOf(
+                    "name" to "old"
+                ),
+                source = mapOf(
+                    "name" to "new"
+                ),
+                strategy = MergeStrategy.RECURSIVE
+            )
+        )
+
+        assertEquals(
+            "old",
+            result.merged["name"]
+        )
+
+        assertTrue(result.hasConflicts)
+    }
+
+    @Test
+    fun `should detect list conflict instead of type mismatch`() {
+
+        val result = engine.merge(
+            MergeRequest(
+                target = mapOf(
+                    "items" to listOf("a", "b")
+                ),
+                source = mapOf(
+                    "items" to listOf("c")
+                )
+            )
+        )
+
+        assertTrue(result.hasConflicts)
+
+        assertEquals(
+            MergeConflictType.LIST_CONFLICT,
+            result.conflicts.first().type
+        )
+
+        assertEquals(
+            "items",
+            result.conflicts.first().path
+        )
+    }
+}
+

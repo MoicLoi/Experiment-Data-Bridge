@@ -1,0 +1,118 @@
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODYyOTk3ODcsImV4cCI6MTc4NjM4NjE4N30.EjrEr5N1R3lw0pyLcocHPxnJ3e64Q2hPLecqwrNMwS8
+@baseUrl = localhost:25560
+
+### ==========================================
+### 前置准备：获取认证 Token（如果需要）
+### ==========================================
+# @name login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+
+
+
+### ==========================================
+### 1. 标签相关 API 测试
+### ==========================================
+
+### 1.1 获取项目的所有标签 (GET)
+GET {{baseUrl}}/api/v1/projects/1/metadata/tags
+Authorization: Bearer {{authToken}}
+
+###
+POST http://localhost:25560/api/v1/projects/1/metadata
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "description": "Laboratory animal experiment",
+  "category": "animal",
+  "tags": ["animal", "experiment"],
+  "dataSource": "mysql"
+}
+### 1.2 添加一个新标签 (POST)
+POST {{baseUrl}}/api/v1/projects/1/metadata/tags
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "tag": "veterinary"
+}
+
+
+### 1.3 添加重复标签（验证幂等性） (POST)
+POST {{baseUrl}}/api/v1/projects/1/metadata/tags
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "tag": "animal"
+}
+
+
+### 1.4 添加带连字符的标签 (POST)
+POST {{baseUrl}}/api/v1/projects/1/metadata/tags
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "tag": "lab-animal"
+}
+
+
+### 1.5 删除指定标签 (DELETE)
+DELETE {{baseUrl}}/api/v1/projects/1/metadata/tags/animal
+Authorization: Bearer {{authToken}}
+
+
+### 1.6 删除带连字符的标签 (DELETE)
+DELETE {{baseUrl}}/api/v1/projects/1/metadata/tags/lab-animal
+Authorization: Bearer {{authToken}}
+
+
+### ==========================================
+### 2. 异常与边界情况测试
+### ==========================================
+
+### 2.1 拒绝无效的项目 ID - GET
+GET {{baseUrl}}/api/v1/projects/abc/metadata/tags
+Authorization: Bearer {{authToken}}
+
+
+### 2.2 拒绝无效的项目 ID - POST (添加标签)
+POST {{baseUrl}}/api/v1/projects/abc/metadata/tags
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "tag": "animal"
+}
+
+
+### 2.3 拒绝无效的项目 ID - DELETE (删除标签)
+DELETE {{baseUrl}}/api/v1/projects/abc/metadata/tags/animal
+Authorization: Bearer {{authToken}}
+
+
+### 2.4 拒绝缺少标签路径参数的请求 (应返回 404)
+DELETE {{baseUrl}}/api/v1/projects/1/metadata/tags
+Authorization: Bearer {{authToken}}
+
+
+### 2.5 拒绝空白标签 (应返回 400 Bad Request)
+POST {{baseUrl}}/api/v1/projects/1/metadata/tags
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "tag": "   "
+}
+
+
+### 2.6 测试未授权访问 (应返回 401 Unauthorized)
+GET {{baseUrl}}/api/v1/projects/1/metadata/tags

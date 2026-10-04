@@ -1,0 +1,471 @@
+package me.moiclathy.edb.core.config.merge.service
+
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.moiclathy.edb.core.config.merge.MergeEngine
+import me.moiclathy.edb.core.config.merge.MergeResult
+import me.moiclathy.edb.core.config.snapshot.model.ConfigurationSnapshot
+import me.moiclathy.edb.core.config.snapshot.model.SnapshotMetadata
+import me.moiclathy.edb.core.config.snapshot.service.ConfigurationSnapshotService
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import java.time.Instant
+
+class ConfigurationMergeServiceTest {
+
+    private val snapshotService =
+        mockk<ConfigurationSnapshotService>()
+
+    private val mergeEngine =
+        mockk<MergeEngine>()
+
+    private val service =
+        ConfigurationMergeService(
+            snapshotService = snapshotService,
+            mergeEngine = mergeEngine
+        )
+
+    private fun snapshot(
+        id: Long,
+        projectId: Int,
+        version: Int,
+        yaml: String
+    ): ConfigurationSnapshot {
+
+        return ConfigurationSnapshot(
+            id = id,
+            projectId = projectId,
+            version = version,
+            metadata = SnapshotMetadata(
+                createdAt = Instant.now(),
+                createdBy = "test-user"
+            ),
+            yaml = yaml
+        )
+    }
+
+    @Test
+    fun `should merge two snapshots`() {
+
+        val target =
+            snapshot(
+                id = 1L,
+                projectId = 10,
+                version = 1,
+                yaml = """
+                    version: 1
+                    database:
+                      host: localhost
+                """.trimIndent()
+            )
+
+        val source =
+            snapshot(
+                id = 2L,
+                projectId = 10,
+                version = 2,
+                yaml = """
+                    version: 1
+                    database:
+                      port: 3306
+                """.trimIndent()
+            )
+
+        val mergedYaml =
+            """
+                version: 1
+                database:
+                  host: localhost
+                  port: 3306
+            """.trimIndent()
+
+        every {
+            snapshotService.getSnapshot(1L)
+        } returns target
+
+        every {
+            snapshotService.getSnapshot(2L)
+        } returns source
+
+        every {
+            mergeEngine.merge(
+                target.yaml,
+                source.yaml
+            )
+        } returns MergeResult(
+            mergedYaml = mergedYaml,
+            conflicts = emptyList()
+        )
+
+        val result =
+            service.mergeSnapshots(
+                targetSnapshotId = 1L,
+                sourceSnapshotId = 2L
+            )
+
+        assertEquals(
+            target,
+            result.targetSnapshot
+        )
+
+        assertEquals(
+            source,
+            result.sourceSnapshot
+        )
+
+        assertEquals(
+            mergedYaml,
+            result.mergedYaml
+        )
+
+        assertTrue(
+            result.conflicts.isEmpty()
+        )
+
+        assertTrue(
+            result.canApply
+        )
+
+        verify(exactly = 1) {
+            snapshotService.getSnapshot(1L)
+        }
+
+        verify(exactly = 1) {
+            snapshotService.getSnapshot(2L)
+        }
+
+        verify(exactly = 1) {
+            mergeEngine.merge(
+                target.yaml,
+                source.yaml
+            )
+        }
+    }
+
+    @Test
+    fun `should reject self merge`() {
+
+        val exception =
+            assertThrows(
+                RuntimeException::class.java
+            ) {
+                service.mergeSnapshots(
+                    targetSnapshotId = 1L,
+                    sourceSnapshotId = 1L
+                )
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("cannot be merged")
+        )
+
+        verify(exactly = 0) {
+            snapshotService.getSnapshot(any())
+        }
+
+        verify(exactly = 0) {
+            mergeEngine.merge(
+                any(),
+                any()
+            )
+        }
+    }
+
+    @Test
+    fun `should reject snapshots from different projects`() {
+
+        val target =
+            snapshot(
+                id = 1L,
+                projectId = 10,
+                version = 1,
+                yaml = "database:\n  host: localhost"
+            )
+
+        val source =
+            snapshot(
+                id = 2L,
+                projectId = 20,
+                version = 1,
+                yaml = "database:\n  port: 3306"
+            )
+
+        every {
+            snapshotService.getSnapshot(1L)
+        } returns target
+
+        every {
+            snapshotService.getSnapshot(2L)
+        } returns source
+
+        val exception =
+            assertThrows(
+                RuntimeException::class.java
+            ) {
+                service.mergeSnapshots(
+                    targetSnapshotId = 1L,
+                    sourceSnapshotId = 2L
+                )
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("different projects")
+        )
+
+        verify(exactly = 0) {
+            mergeEngine.merge(
+                any(),
+                any()
+            )
+        }
+    }
+
+    @Test
+    fun `should reject invalid target snapshot id`() {
+
+        val exception =
+            assertThrows(
+                RuntimeException::class.java
+            ) {
+                service.mergeSnapshots(
+                    targetSnapshotId = 0L,
+                    sourceSnapshotId = 2L
+                )
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("Target snapshot ID")
+        )
+
+        verify(exactly = 0) {
+            snapshotService.getSnapshot(any())
+        }
+    }
+
+    @Test
+    fun `should reject invalid source snapshot id`() {
+
+        val exception =
+            assertThrows(
+                RuntimeException::class.java
+            ) {
+                service.mergeSnapshots(
+                    targetSnapshotId = 1L,
+                    sourceSnapshotId = 0L
+                )
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("Source snapshot ID")
+        )
+
+        verify(exactly = 0) {
+            snapshotService.getSnapshot(any())
+        }
+    }
+
+    @Test
+    fun `should reject missing target snapshot`() {
+
+        every {
+            snapshotService.getSnapshot(100L)
+        } throws
+                IllegalArgumentException(
+                    "Configuration snapshot not found: 100"
+                )
+
+        val exception =
+            assertThrows(
+                RuntimeException::class.java
+            ) {
+                service.mergeSnapshots(
+                    targetSnapshotId = 100L,
+                    sourceSnapshotId = 200L
+                )
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("Configuration snapshot not found")
+        )
+
+        verify(exactly = 1) {
+            snapshotService.getSnapshot(100L)
+        }
+
+        verify(exactly = 0) {
+            mergeEngine.merge(
+                any(),
+                any()
+            )
+        }
+    }
+
+    @Test
+    fun `should reject blank target yaml`() {
+
+        val target =
+            snapshot(
+                id = 1L,
+                projectId = 10,
+                version = 1,
+                yaml = " "
+            )
+
+        val source =
+            snapshot(
+                id = 2L,
+                projectId = 10,
+                version = 2,
+                yaml = "version: 1"
+            )
+
+        every {
+            snapshotService.getSnapshot(1L)
+        } returns target
+
+        every {
+            snapshotService.getSnapshot(2L)
+        } returns source
+
+        val exception =
+            assertThrows(
+                RuntimeException::class.java
+            ) {
+                service.mergeSnapshots(
+                    targetSnapshotId = 1L,
+                    sourceSnapshotId = 2L
+                )
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("Target snapshot contains empty YAML")
+        )
+
+        verify(exactly = 0) {
+            mergeEngine.merge(
+                any(),
+                any()
+            )
+        }
+    }
+
+    @Test
+    fun `should reject blank source yaml`() {
+
+        val target =
+            snapshot(
+                id = 1L,
+                projectId = 10,
+                version = 1,
+                yaml = "version: 1"
+            )
+
+        val source =
+            snapshot(
+                id = 2L,
+                projectId = 10,
+                version = 2,
+                yaml = " "
+            )
+
+        every {
+            snapshotService.getSnapshot(1L)
+        } returns target
+
+        every {
+            snapshotService.getSnapshot(2L)
+        } returns source
+
+        val exception =
+            assertThrows(
+                RuntimeException::class.java
+            ) {
+                service.mergeSnapshots(
+                    targetSnapshotId = 1L,
+                    sourceSnapshotId = 2L
+                )
+            }
+
+        assertTrue(
+            exception.message!!
+                .contains("Source snapshot contains empty YAML")
+        )
+
+        verify(exactly = 0) {
+            mergeEngine.merge(
+                any(),
+                any()
+            )
+        }
+    }
+
+    @Test
+    fun `should preserve merge conflicts`() {
+
+        val target =
+            snapshot(
+                id = 1L,
+                projectId = 10,
+                version = 1,
+                yaml = "database:\n  port: 3306"
+            )
+
+        val source =
+            snapshot(
+                id = 2L,
+                projectId = 10,
+                version = 2,
+                yaml = "database:\n  port: 5432"
+            )
+
+        every {
+            snapshotService.getSnapshot(1L)
+        } returns target
+
+        every {
+            snapshotService.getSnapshot(2L)
+        } returns source
+
+        val conflict =
+            mockk<me.moiclathy.edb.core.config.merge.engine.MergeConflict>()
+
+        every {
+            mergeEngine.merge(
+                target.yaml,
+                source.yaml
+            )
+        } returns MergeResult(
+            mergedYaml = target.yaml,
+            conflicts = listOf(conflict)
+        )
+
+        val result =
+            service.mergeSnapshots(
+                targetSnapshotId = 1L,
+                sourceSnapshotId = 2L
+            )
+
+        assertEquals(
+            1,
+            result.conflicts.size
+        )
+
+        assertTrue(
+            result.hasConflicts
+        )
+
+        assertFalse(
+            result.canApply
+        )
+    }
+}

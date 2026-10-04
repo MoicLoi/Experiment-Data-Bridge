@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "edb-python-worker"
+version = "0.1.0"
+description = "Reference FastAPI analysis worker for Experiment Data Bridge"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.34,<1",
+    "python-multipart>=0.0.20,<1",
+    "pydantic>=2.10,<3",
+    "numpy>=2.1,<3",
+    "h5py>=3.12,<4",
+    "scipy>=1.15,<2",
+    "openpyxl>=3.1,<4",
+]
+
+[project.optional-dependencies]
+test = [
+    "httpx>=0.28,<1",
+    "pytest>=8.3,<9",
+]
+
+[project.scripts]
+edb-python-worker = "edb_python_worker.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/edb_python_worker"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

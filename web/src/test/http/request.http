@@ -1,0 +1,32 @@
+### 1. 先登录获取 JWT Token (如果你的导入接口需要鉴权)
+# 请根据实际的用户名字段调整
+POST http://localhost:25560/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+> {%
+    // 自动将登录成功返回的 Token 存入全局环境变量中，供后续请求使用
+    client.global.set("auth_token", response.body.token);
+%}
+
+
+
+### 2. 执行配置导入
+# @name importConfig
+POST http://localhost:25560/api/v1/projects/2/configuration/import
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODYwMDE3NTEsImV4cCI6MTc4NjA4ODE1MX0.4DDnOfIT6xpZyKVBqeKKQrb9uNmtGOnOTUku1auKV0k
+
+{
+  "yaml": "version: 1\nproject:\n  name: imported\nworkflow:\n  steps:\n    - prepare\noutput:\n  format: json\n  path: ./out"
+}
+
+
+
+### 3. 验证 Git 历史，查看是否生成了对应的 Commit 记录
+GET http://localhost:25560/api/v1/projects/2/git/history
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJJZCI6MSwicm9sZSI6IkFETUlOIiwiaXNzIjoiZXhwZXJpbWVudC1kYXRhLWJyaWRnZSIsImF1ZCI6ImVkYi1jbGllbnQiLCJpYXQiOjE3ODYwMDE3NTEsImV4cCI6MTc4NjA4ODE1MX0.4DDnOfIT6xpZyKVBqeKKQrb9uNmtGOnOTUku1auKV0k

@@ -1,0 +1,13 @@
+### 1. 测试访问受保护的接口（不带 Token —— 预期应返回 401 Unauthorized）
+GET http://localhost:25560/api/v1/user/me
+Accept: application/json
+
+### 2. 测试访问受保护的接口（带 Token —— 预期成功返回用户信息）
+GET http://localhost:25560/api/v1/user/me
+Authorization: Bearer <你的JWT_Token字符串>
+Accept: application/json
+
+### 3. 测试管理员专属接口（需要携带 ADMIN 角色的 Token）
+GET http://localhost:25560/api/v1/admin/test
+Authorization: Bearer <把你的管理员JWT_Token粘贴到这里>
+Accept: application/json

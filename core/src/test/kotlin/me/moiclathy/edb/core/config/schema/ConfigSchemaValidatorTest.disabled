@@ -1,0 +1,119 @@
+package me.moiclathy.edb.core.config.schema
+
+import me.moiclathy.edb.core.config.OutputConfig
+import me.moiclathy.edb.core.config.ProjectConfig
+import me.moiclathy.edb.core.config.ProjectInfo
+import me.moiclathy.edb.core.config.WorkflowConfig
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+
+class ConfigSchemaValidatorTest {
+
+    private val validator = ConfigSchemaValidator()
+
+    private fun createValidConfig(): ProjectConfig {
+        return ProjectConfig(
+            version = 1,
+            project = ProjectInfo(
+                name = "Experiment",
+                description = null,
+                species = "Mouse",
+                owner = "Admin"
+            ),
+            workflow = WorkflowConfig(
+                steps = listOf("prepare", "collect")
+            ),
+            output = OutputConfig(
+                format = "json",
+                path = "./output"
+            )
+        )
+    }
+
+    @Test
+    fun shouldValidateValidConfigurationSuccessfully() {
+        val config = createValidConfig()
+        val result = validator.validate(config)
+
+        assertTrue(result.valid)
+        assertTrue(result.errors.isEmpty())
+    }
+
+    @Test
+    fun shouldRejectBlankProjectName() {
+        val config = createValidConfig().copy(
+            project = createValidConfig().project.copy(name = "")
+        )
+        val result = validator.validate(config)
+
+        assertFalse(result.valid)
+        assertEquals("project.name", result.errors.first().field)
+    }
+
+    @Test
+    fun shouldRejectEmptyWorkflowSteps() {
+        val config = createValidConfig().copy(
+            workflow = WorkflowConfig(steps = emptyList())
+        )
+        val result = validator.validate(config)
+
+        assertFalse(result.valid)
+        assertTrue(result.errors.any { it.field == "workflow.steps" })
+    }
+
+    @Test
+    fun shouldRejectBlankOutputFormat() {
+        val config = createValidConfig().copy(
+            output = createValidConfig().output.copy(format = "")
+        )
+        val result = validator.validate(config)
+
+        assertFalse(result.valid)
+        assertTrue(result.errors.any { it.field == "output.format" })
+    }
+
+    @Test
+    fun shouldRejectBlankOutputPath() {
+        val config = createValidConfig().copy(
+            output = createValidConfig().output.copy(path = "")
+        )
+        val result = validator.validate(config)
+
+        assertFalse(result.valid)
+        assertTrue(result.errors.any { it.field == "output.path" })
+    }
+
+    @Test
+    fun shouldRejectInvalidVersion() {
+        val config = createValidConfig().copy(version = 999)
+        val result = validator.validate(config)
+
+        assertFalse(result.valid)
+        assertTrue(result.errors.any { it.field == "version" })
+    }
+
+    @Test
+    fun shouldCollectAllErrorsAtOnce() {
+        val config = ProjectConfig(
+            version = 999,
+            project = ProjectInfo(
+                name = "",
+                description = null,
+                species = "Mouse",
+                owner = "Admin"
+            ),
+            workflow = WorkflowConfig(
+                steps = emptyList()
+            ),
+            output = OutputConfig(
+                format = "",
+                path = ""
+            )
+        )
+
+        val result = validator.validate(config)
+
+        assertFalse(result.valid)
+        assertEquals(5, result.errors.size)
+    }
+}
