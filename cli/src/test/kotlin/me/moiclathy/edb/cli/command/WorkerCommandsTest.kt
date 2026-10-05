@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 class WorkerCommandsTest {
     @Test
-    fun `worker command exposes minecraft style subcommands`() {
+    fun `worker command exposes the expected subcommands`() {
         val result = createCli().test("worker --help")
 
         assertEquals(0, result.statusCode)

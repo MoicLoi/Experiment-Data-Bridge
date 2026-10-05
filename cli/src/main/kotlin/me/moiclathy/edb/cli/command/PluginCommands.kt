@@ -58,8 +58,8 @@ class PluginValidateCommand(
     }
 }
 
-internal inline fun CliktCommand.command(root: EdbCommand, block: (MinecraftCliOutput) -> Unit) {
-    val output = MinecraftCliOutput(
+internal inline fun CliktCommand.command(root: EdbCommand, block: (EdbCliOutput) -> Unit) {
+    val output = EdbCliOutput(
         json = root.jsonOutput,
         stdout = { echo(it) },
         stderr = { echo(it, err = true) }

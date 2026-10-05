@@ -55,7 +55,7 @@ import me.moiclathy.edb.cli.service.TemplateCliSummary
 import me.moiclathy.edb.cli.service.AgentLifecycleCliEvent
 import me.moiclathy.edb.cli.service.AgentWatchStopReason
 
-class MinecraftCliOutput(
+class EdbCliOutput(
     private val json: Boolean,
     private val stdout: (String) -> Unit,
     private val stderr: (String) -> Unit
