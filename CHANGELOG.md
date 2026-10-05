@@ -73,3 +73,16 @@ The current release label is stored in `packaging/demo-v1/VERSION`.
   and macOS contributors cannot produce a release package without changes.
 - The Tauri desktop shell is not part of `settings.gradle.kts` and its README
   contains a machine-specific path.
+- The `core` main source set contains a package called
+  `me.moiclathy.edb.core.config.test` holding four scratch files
+  (`test.kt`, `testRound.kt`, `test_full.kt`, `valiTest.kt`). Three are
+  standalone `fun main()` experiments and one asserts with `kotlin.test`. They
+  compile into `core.jar`.
+- `core/build.gradle.kts` declares `kotlin("test")` in the `implementation`
+  configuration rather than `testImplementation`, so the test framework ships as
+  a production dependency — `kotlin-test-2.2.0.jar` is present in the release fat
+  JAR. This is presumably what lets the scratch files above compile.
+- The disabled-test suffixes are inconsistent: 46 files use `.disabled`, and
+  three use misspellings (`.disabeld`, `.disalbed`, `.dsiabled`). They are
+  excluded from the build either way, because Kotlin only compiles `*.kt`, but
+  the spellings should be normalised when the tests are re-enabled.
