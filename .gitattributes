@@ -24,8 +24,9 @@ gradlew text eol=lf
 *.zip binary
 *.gz binary
 
-# Generated files that add noise to diffs and language statistics.
-package-lock.json linguist-generated=true -diff
-desktop/src-tauri/Cargo.lock linguist-generated=true -diff
-web-ui/src/styles.css linguist-vendored=false
+# Generated files: flagged so GitHub collapses them in diffs and excludes them
+# from language statistics, but kept diffable — a lockfile change is exactly the
+# kind of thing a reviewer needs to see.
+package-lock.json linguist-generated=true
+desktop/src-tauri/Cargo.lock linguist-generated=true
 desktop/src-tauri/gen/** linguist-generated=true

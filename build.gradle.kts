@@ -1,5 +1,9 @@
 group = "me.moiclathy.edb"
-version = "1.0.0-SNAPSHOT"
+
+// The base project version lives in gradle.properties so that the Gradle build,
+// the npm manifests, the Tauri manifest and the release label cannot drift
+// apart silently. packaging/ci/check-repo.mjs enforces the agreement.
+version = providers.gradleProperty("version").get()
 
 val npmCommand = if (System.getProperty("os.name").lowercase().contains("windows")) "npm.cmd" else "npm"
 
