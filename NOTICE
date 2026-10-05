@@ -1,0 +1,55 @@
+EDB (Experiment Data Bridge)
+Copyright 2026 moiclathy
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+This product includes software developed by third parties. The complete
+inventory ships in THIRD-PARTY-LICENSES.md. That file is generated from the
+actual release artifacts, not maintained by hand:
+
+    pwsh -File packaging/demo-v1/collect-licenses.ps1 `
+      -LibDir release/edb-demo-v1/cli/lib `
+      -ArchivePath release/edb-demo-v1/server/EXPERIMENT_DATA_BRIDGE.jar `
+      -OutputPath THIRD-PARTY-LICENSES.md
+
+Of the entries whose licence metadata resolves automatically, the majority are
+Apache-2.0; MIT, ISC, BSD-3-Clause and EDL-1.0 are also present.
+
+Obligations to honour before publishing a binary distribution
+-------------------------------------------------------------
+
+1. MySQL Connector/J 9.4.0 - GPLv2 with the Universal FOSS Exception.
+   Verified from the artifact itself: the licensing manual bundled at the root
+   of the fat JAR contains both the "Universal FOSS Exception" and the GPLv2
+   text. The FOSS Exception is what permits this combination, and it applies
+   because EDB is distributed as open source under Apache-2.0. If EDB were ever
+   relicensed as proprietary, MySQL Connector/J would have to be replaced - for
+   example with MariaDB Connector/J (LGPL-2.1).
+
+2. org.eclipse.jgit 7.2.1.202505142326-r - Eclipse Distribution License v1.0,
+   a BSD-3-Clause variant. This is stated in the about.html bundled inside the
+   artifact; it is not licensed under the EPL.
+
+3. Test-scope dependencies (JUnit 5, H2, mockk, Testcontainers) are not part of
+   the distributed runtime and are not redistributed in the release package.
+
+4. THIRD-PARTY-LICENSES.md lists entries as UNKNOWN when an artifact ships no
+   machine-readable licence metadata. This is common in the Kotlin/JetBrains
+   ecosystem. Those entries must be resolved by hand before binaries are
+   published; the list is a work item, not an assertion that they are
+   unlicensed.
+
+This file is an engineering notice, not legal advice.
