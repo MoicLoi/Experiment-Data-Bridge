@@ -15,6 +15,13 @@ anything that matters.
 | `{{ARCHIVE}}` | Complete Windows package: server fat JAR, CLI, web console, config templates, example data |
 | `SHA256SUMS.txt` | Checksums for the archive and for the server JAR on its own |
 
+The CLI shares the server fat JAR: `cli/lib` holds only the CLI framework (clikt,
+mordant and their native-launcher support), and the launchers put
+`..\server\EXPERIMENT_DATA_BRIDGE.jar` on the classpath. Shipping the duplicated
+dependency JARs twice roughly doubled the archive for no benefit — but it does
+mean `cli/` and `server/` must stay together. The package build runs a
+`cli --help` smoke test before producing the archive.
+
 Verify before running:
 
 ```powershell

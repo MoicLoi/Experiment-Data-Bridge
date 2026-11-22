@@ -33,6 +33,51 @@ if(Test-Path -LiteralPath $Target){Remove-Item -LiteralPath $Target -Recurse -Fo
 Copy-Item -LiteralPath $jar -Destination (Join-Path $Target 'server')
 Copy-Item -Path (Join-Path $web '*') -Destination (Join-Path $Target 'web') -Recurse
 Copy-Item -Path (Join-Path $cli '*') -Destination (Join-Path $Target 'cli') -Recurse
+
+# --- CLI dependency slimming ------------------------------------------------
+# The cli module depends on :core, so its installDist drags core's whole
+# transitive dependency graph (POI, PDFBox, MySQL, Flyway, Redis, Docker, JGit…)
+# into the package - 101 JARs / ~72 MB that are already inside the server fat
+# JAR. Only the CLI framework itself is unique to the CLI.
+#
+# So: keep the CLI-specific JARs, point the launchers at the server fat JAR, and
+# prove the result still runs before declaring the package good.
+$cliLib = Join-Path $Target 'cli\lib'
+$serverJar = Join-Path $Target 'server\EXPERIMENT_DATA_BRIDGE.jar'
+if (!(Test-Path -LiteralPath $serverJar)) { throw 'CLI slimming requires the server fat JAR, which is missing.' }
+
+$cliKeepPattern = '^(cli-|clikt|mordant|colormath|jansi|jna)'
+$cliJars = @(Get-ChildItem -LiteralPath $cliLib -Filter *.jar -File)
+$toRemove = @($cliJars | Where-Object { $_.Name -notmatch $cliKeepPattern })
+$reclaimedBytes = ($toRemove | Measure-Object Length -Sum).Sum
+$toRemove | Remove-Item -Force
+Write-Host ("CLI slimmed: kept {0} JAR(s), removed {1} duplicate JAR(s), reclaimed {2:N1} MB" -f ($cliJars.Count - $toRemove.Count), $toRemove.Count, ($reclaimedBytes / 1MB))
+
+# Rewrite the classpath line in both launchers. Line endings are preserved by
+# splitting on them, so the bash script keeps LF and the .bat keeps CRLF.
+foreach ($launcher in @(@{ Path = (Join-Path $Target 'cli\bin\cli.bat'); Prefix = 'set CLASSPATH='; Line = 'set CLASSPATH=%APP_HOME%\lib\*;%APP_HOME%\..\server\EXPERIMENT_DATA_BRIDGE.jar' },
+                        @{ Path = (Join-Path $Target 'cli\bin\cli');     Prefix = 'CLASSPATH=';     Line = 'CLASSPATH=$APP_HOME/lib/*:$APP_HOME/../server/EXPERIMENT_DATA_BRIDGE.jar' })) {
+  $path = $launcher.Path
+  if (!(Test-Path -LiteralPath $path)) { continue }
+  $encoding = [Text.UTF8Encoding]::new($false)
+  $parts = [regex]::Split([IO.File]::ReadAllText($path, $encoding), '(\r?\n)')
+  $patched = $false
+  for ($i = 0; $i -lt $parts.Count; $i++) {
+    if ($parts[$i].StartsWith($launcher.Prefix)) { $parts[$i] = $launcher.Line; $patched = $true; break }
+  }
+  if (!$patched) { throw "Could not rewrite the classpath in $path" }
+  [IO.File]::WriteAllText($path, ($parts -join ''), $encoding)
+}
+Write-Host 'CLI launchers repointed at the server fat JAR.'
+
+# Smoke-test the slimmed CLI: a silently broken CLI is worse than a big package.
+$cliClasspath = (Join-Path $cliLib '*') + ';' + $serverJar
+$cliOutput = & java -cp $cliClasspath me.moiclathy.edb.cli.CliMainKt --help 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or $cliOutput -notmatch 'Usage: edb') {
+  throw "Slimmed CLI smoke test failed (exit $LASTEXITCODE). Output:`n$cliOutput"
+}
+Write-Host 'CLI smoke test passed (wrapper --help).'
+
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'config\application.yml.template') -Destination (Join-Path $Target 'config')
 Copy-Item -Path (Join-Path $PSScriptRoot 'examples\workflows\*') -Destination (Join-Path $Target 'config\workflows')
 Copy-Item -Path (Join-Path $PSScriptRoot 'examples\workflow-templates\*') -Destination (Join-Path $Target 'config\workflow-templates')
