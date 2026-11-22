@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version_label:
+        description: 'Release label to embed (defaults to packaging/demo-v1/VERSION)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build release package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web-ui/package-lock.json
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The packaging task itself runs the web console type-check and build, so
+      # only the dependency install has to happen here.
+      - name: Install web console dependencies
+        working-directory: web-ui
+        run: npm ci
+
+      # Produces release/edb-demo-v1: server fat JAR, CLI distribution, web
+      # console, config templates, examples, plus the packaged secret scan and
+      # Flyway migration check.
+      - name: Build and verify the demo package
+        run: .\gradlew.bat packageDemoV1 --console=plain
+
+      # Turns the verified package into the release artifact set: archive,
+      # checksums and notes. Refuses to run if runtime credentials leaked into
+      # the package.
+      - name: Build release artifacts
+        shell: pwsh
+        run: ./packaging/release/make-release.ps1
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-ChildItem ./dist/RELEASE_NOTES-*.md |
+            ForEach-Object { $_.BaseName -replace '^RELEASE_NOTES-','' })
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: edb-release-${{ steps.version.outputs.version }}
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+            dist/RELEASE_NOTES-*.md
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: EDB ${{ steps.version.outputs.version }}
+          body_path: dist/RELEASE_NOTES-${{ steps.version.outputs.version }}.md
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: true

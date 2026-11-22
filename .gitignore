@@ -68,7 +68,9 @@ outputs/
 .edb-demo.pid
 
 # --- Generated distributions and packages ----------------------------------
-release/
+# Anchored on purpose: a bare `release/` also matches packaging/release/, which
+# holds the tracked release scripts.
+/release/
 packaging/demo-v1/config/application.yml
 
 # --- Local configuration and secrets ---------------------------------------
