@@ -77,16 +77,17 @@ jobs:
   backend-tests:
     name: Backend tests
     runs-on: ubuntu-latest
-    # NOT blocking yet, deliberately and visibly.
+    # NOT blocking yet, for a specific and verified reason.
     #
-    # The full suite has never been verified to pass on a clean runner, and part
-    # of it is disabled (see CHANGELOG.md). 46 test sources carry a .disabled
-    # suffix after an interrupted refactor, and some remaining tests may expect a
-    # reachable MySQL or a Docker daemon.
+    # :web:compileTestKotlin currently fails with four errors caused by API drift
+    # from the Docker worker rebuild feature (configureDockerWorkerFleetLifecycle
+    # gained a `rebuildProvider` parameter; dockerWorkerFleetAdminRoutes gained a
+    # `config: AppConfig` parameter). 46 further test sources are disabled. See
+    # CHANGELOG.md "Known issues".
     #
-    # Remove `continue-on-error` as soon as this job is reliably green; until
-    # then it reports the suite's real state without giving a false impression
-    # that the build is broken.
+    # Remove `continue-on-error` once the web test sources compile and the suite
+    # is green; until then this job reports the real state without implying the
+    # build is broken.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4

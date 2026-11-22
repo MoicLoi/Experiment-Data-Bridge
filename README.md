@@ -38,6 +38,10 @@ Known gaps, tracked rather than hidden:
   `com.experiment.bridge.web.ApplicationKt`. It is dead configuration (the server
   is started with `embeddedServer`, not `EngineMain`), but it is misleading.
 - `THIRD-PARTY-LICENSES.md` has unresolved entries; see [NOTICE](NOTICE).
+- `./gradlew build` and `./gradlew test` currently fail because the `web`
+  module's **test** sources do not compile (API drift after the Docker worker
+  rebuild feature landed). `./gradlew packageDemoV1` is unaffected — it never
+  compiles test sources. Details in [CHANGELOG.md](CHANGELOG.md).
 
 ## Architecture
 
@@ -73,6 +77,15 @@ authoritative guide for contributors; this README only summarises.
 - Node.js 20+ and npm (web console)
 - Docker is optional and only needed for containerised analysis workers
 - Windows is currently required for the packaging task (PowerShell + `start.bat`)
+
+> **Windows path caveat — verified, not theoretical.** Gradle 8.13 writes
+> test-worker argument files in the platform ANSI code page (GBK on a zh-CN
+> system) while the JDK reads `@argfile` contents as UTF-8. If the checkout path
+> contains non-ASCII characters, every test task fails with
+> `ClassNotFoundException` for the project's own test classes even though the
+> class files exist on disk — compilation succeeds and only the test worker
+> breaks. Check out and build from an ASCII-only path (for example `D:\edb`), or
+> enable Windows *Use Unicode UTF-8 for worldwide language support*.
 
 ## Quick start (from source)
 

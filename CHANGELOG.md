@@ -27,6 +27,24 @@ The current release label is stored in `packaging/demo-v1/VERSION`.
 - `packaging/demo-v1/collect-licenses.ps1`: generates
   `THIRD-PARTY-LICENSES.md` from the shipped artifacts (CLI lib JARs and the
   server fat JAR) instead of a hand-maintained list.
+- `packaging/release/make-release.ps1` and `packaging/release/RELEASE_NOTES.md`:
+  turn the verified demo package into the release artifact set (archive,
+  `SHA256SUMS.txt`, notes) and refuse to package when a real
+  `config/application.yml` has crept into the release directory.
+- `.github/workflows/release.yml`: on a `v*` tag, build the package on
+  `windows-latest` and publish it as a GitHub release with checksums attached.
+
+### Fixed
+
+- Documented the cause of a real build failure: **a checkout path containing
+  non-ASCII characters makes every test task fail** with
+  `ClassNotFoundException` for the project's own test classes. Gradle 8.13 writes
+  test-worker argument files in the platform ANSI code page (GBK on zh-CN) while
+  the JDK reads `@argfile` contents as UTF-8, so the classpath entries under that
+  path are decoded incorrectly. Compilation is unaffected; only the test worker
+  breaks. Reproduced and verified: identical sources pass under `D:\edb-build\edb`
+  and fail under `…\项目文件\edb（全）\edb`. Build from an ASCII-only path, or enable
+  the Windows *Use Unicode UTF-8 for worldwide language support* option.
 
 ### Changed
 
@@ -51,6 +69,14 @@ The current release label is stored in `packaging/demo-v1/VERSION`.
 
 ### Known issues
 
+- The `web` module's **test** sources do not compile, so `./gradlew build` and
+  `./gradlew test` fail. Four errors, all API drift from the Docker worker
+  rebuild feature: `configureDockerWorkerFleetLifecycle` gained a third parameter
+  (`rebuildProvider`), so the tests' trailing lambda now binds to the wrong
+  parameter, and `dockerWorkerFleetAdminRoutes` gained a `config: AppConfig`
+  parameter. Affected: `DockerWorkerFleetWebLifecycleTest` (lines 23, 39) and
+  `DockerWorkerFleetAdminRoutesTest` (lines 64, 112). `packageDemoV1` never
+  compiles test sources, which is why releases still build.
 - 46 test sources are disabled via a `.disabled` suffix, including duplicates
   left behind by an interrupted refactor (`ConfigurationCenterTest`,
   `ConfigurationCompareServiceTest`, `ConfigurationMergeServiceTest` and
